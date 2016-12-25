@@ -1,21 +1,711 @@
+-- 
+-- ================================================================================
+--
+--  !! 汎用オブジェクト
+--
+-- ================================================================================
 --
 --
+-- 選択されたオブジェクト
 --
-dev.nil_object_c = dev.new_class(
+--[[
+	*min, *max | *count : number 
+	*from : object
+	select_player : = you
+	customhint : function = nil
+	pie : = nil
+	hintsel : = nil
+]]--
+dev.sel = dev.new_class(
 {
-	Exists = function()
+	__init = function(self, args)	
+		dev.require( args, {{ from = true }} )
+		self.o = args.from
+		
+		self.selmin = dev.option_arg( args.min, args.count )
+		self.selmax = dev.option_arg( args.max, args.count )
+		self.select_player = dev.option_arg( args.player, dev.you )
+		self.customhint = args.hint
+		self.pie = args.pie
+		self.hintsel = args.hintsel
+		
+		if self.selmax==nil then self.selmax=0x7FFFFFFF end
+		
+		dev.require( self.selmin, dev.eval_able("number") )
+		dev.require( self.selmax, dev.eval_able("number") )
+	end,
+	
+	-- インターフェース関数
+	Exists = function( self, est )
+		local mi, mx = self:GetMinMax( est )
+		est:OperandState().min = mi
+		if not self.o:Exists( est ) then
+			return false
+		end
+		
+		if self.pie then self.pie:Update( est, mi ) end
 		return true
 	end,
 	
-	Select = function()
-		return nil
+	-- ヒント表示、選択
+	Select = function( self, est )
+		local sp=dev.eval( self.select_player, est )
+		local mi, mx = self:GetMinMax( est )
+		
+		local g=self:DoSelect( est, sp, mi, mx )
+		if self.pie then self.pie:Update( est, g:GetCount() ) end
+		return g
 	end,
 	
-	GetAll = function()
-		return Group.CreateGroup()
-	end,	
+	GetAll = function( self, est )
+		return self.o:GetAll( est )
+	end,
+	
+	GetMinMax = function( self, est )
+		local mi = dev.eval( self.selmin, est )
+		local mx = dev.eval( self.selmax, est )
+		if self.pie then
+			mx = math.min( mx, self.pie:Get( est ) )
+			mi = math.min( mi, mx )
+			if mx==0 then
+				est:OpDebugDisp(self,":選択可能なオブジェクトが0になりました")
+			end
+		end
+		return mi, mx
+	end,
+	
+	Location = function( self, est )
+		return self.o:Location(est)
+	end,
+	
+	-- メンバ関数
+	DoSelect = function( self, est, sp, mi, mx )
+		self:HintSelect( est, sp )
+		
+		est:OperandState().select_player = sp
+		est:OperandState().min = mi
+		est:OperandState().max = mx
+		
+		local g
+		if self.o.SelectImpl then
+			g=self.o:SelectImpl( est )
+		else
+			g=self.o:Select( est )
+			g=g:Select( sp, mi, mx, nil )
+		end
+		return g
+	end,
+	
+	HintSelect = function( self, est, tp )
+		local ophint = nil
+		local cop = est:CurOp()
+		if cop then ophint = cop:GetHint() end
+		
+		if self.customhint~=nil then
+			self.customhint( tp, ophint )
+		else
+			Duel.Hint( HINT_SELECTMSG, tp, ophint )
+		end
+	end,
+	
+	CompleteSelOptions = function( self, othersel )
+		for i, name in ipairs(self.sel_options) do
+			if self[name]==nil then
+				self[name] = othersel[name]
+			end
+		end
+	end,
+	
+	sel_options = { "from", "selmin", "selmax", "select_player", "customhint", "pie", "hintsel" }
 })
-dev.nil_object = dev.nil_object_c()
+
+--
+-- 上限を超えていた場合のみ選択する
+--
+dev.pick_sel = dev.new_class(dev.sel,
+{
+	__init = function(self, args)
+		if args.min==nil then args.min=1 end
+		dev.super_init(self, args)
+	end,
+	
+	-- ヒント表示、選択
+	Select = function( self, est )
+		local g=self.o:GetAll( est )
+		
+		local mi, mx=self:GetMinMax( est )
+		if mx < g:GetCount() then
+			local sp=dev.eval( self.select_player, est )
+			g=self:DoSelect( est, sp, mi, mx )
+		end
+		
+		if self.pie then self.pie:Update( est, g:GetCount() ) end
+		return g
+	end,
+})
+
+--
+-- 一つ一つ選ぶ
+--
+dev.step_sel = dev.new_class(dev.sel,
+{
+	__init = function(self, args)
+		dev.super_init(self, args)
+		self.rel = args.binary_relation
+		self.ask = dev.option_arg(args.on_proceed, self.DefOnProceed) -- function( i ) -> bool
+		self.askstr = dev.option_arg(args.on_proceed_string, 560)
+	end,
+	
+	-- 
+	Exists = function( self, est, istarget )
+		local all=self:GetAll(est, istarget)
+		local mi, mx = self:GetMinMax(est, istarget)
+		
+		local hit=0
+		local tc=all:GetFirst()
+		while tc do
+			local rem=all:Clone()
+			rem:Remove(tc)
+			local uc=rem:GetFirst()
+			while uc do
+				if self:CheckRelation(tc, uc) then
+					hit = hit + 1
+					if hit>=mi then
+						return true
+					end
+				end
+				uc=rem:GetNext()
+			end
+			tc=all:GetNext()
+		end
+		return false
+	end,
+	
+	Select = function( self, est, istarget )
+		local sp=dev.eval( self.select_player, est )
+		local all=self:GetAll( est, istarget )
+		
+		local gsel=Group.CreateGroup()
+		while true do
+			self:HintSelect( est, sp )
+
+			local g=self.o:Select( est, istarget, sp, 1, 1, all )
+			if self.hintsel then
+				Duel.HintSelection( g )
+			end
+			
+			local c=g:GetFirst()
+			gsel:AddCard(c)
+			
+			local mi, mx = self:GetMinMax(est)
+			if mx <= gsel:GetCount() then
+				break
+			elseif mi <= gsel:GetCount() then
+				if not self:ask( est, gsel:GetCount(), mi, mx ) then
+					break
+				end
+			end
+			all = all:Filter(function(tc) return self:CheckRelation(c,tc) end, c)
+		end
+		return gsel
+	end,
+	
+	--
+	CheckRelation = function( self, l, r )
+		if self.rel==nil then return true end
+		return self.rel(l,r)
+	end,
+	
+	DefOnProceed = function( self, est )
+		local selp=dev.eval( self.select_player, est )
+		return Duel.SelectYesNo( selp, self.askstr )
+	end,
+})
+
+--
+-- ～を含むカードを選択
+--
+
+--
+-- ランダムなカード
+--
+dev.random_pick = dev.new_class(dev.sel,
+{
+	__init = function( self, args )
+		dev.super_init( self, args )
+	end,
+	
+	-- ヒント表示、選択
+	Select = function( self, est )
+		local sp=dev.eval( self.select_player, est )
+		self:HintSelect( est, sp )
+		
+		local gall=self.o:GetAll( est )
+		
+		local mi, mx = self:GetMinMax( est ) -- mi==mx
+		local g=gall:RandomSelect( sp, mx )
+		
+		if self.hintsel then
+			Duel.HintSelection( g )
+		end
+		
+		if self.pie then self.pie:Update( g:GetCount() ) end
+		return g
+	end,
+})
+
+--
+--
+--
+dev.allmatch = dev.new_class(dev.sel,
+{
+	__init = function(self, args)
+		dev.super_init(self, args)
+		self.o = args.from
+		self.filter = args.filter
+	end,
+	
+	Exists = function( self, est )
+		local g=self.o:GetAll( est )
+		return g:IsExists( self.filter, g:GetCount(), nil, est )
+	end,
+	
+	Select = function( self, est )
+		local g=self.o:GetAll( est )
+		if not g:IsExists( self.filter, g:GetCount(), nil, est ) then
+			g:Clear()
+		end
+		return g
+	end,
+})
+
+--
+-- 複数のオブジェクトをまとめて一つのオペランドに流し込む
+--
+dev.sum = dev.new_class(
+{
+	__init = function(self, args)
+		if args.relation then
+			self.rel = args.relation
+		else
+			self.rel = dev.independent()
+		end
+		
+		self.priority = dev.option_arg(args.priority, {})
+		self.parameter = dev.option_arg(args.parameter, {})
+		
+		self.objects = {}
+		for i, o in ipairs(args) do
+			self.objects[i] = o
+			if self.priority[i]==nil then
+				self.priority[i]=i
+			end
+		end
+	end,
+	
+	-- インターフェース関数	
+	--
+	Exists = function( self, est )
+		return self.rel:DoExists( est, self.priority, self )
+	end,
+	
+	Select = function( self, est )
+		local sels = self.rel:DoSelect( est, self.priority, self )
+		for _, i in ipairs(self.parameter) do
+			sels[i] = nil
+		end		
+		return dev.Group.FlatGroups(sels)
+	end,
+	
+	GetMinMax = function( self, est )
+		local mi, mx=0, 0
+		for i, o in ipairs(self.objects) do
+			local mmi, mmx = o:GetMinMax(est)
+			mi = mi + mmi
+			mx = mx + mmx
+		end
+		return mi, mx
+	end,
+	
+	--
+	nextElem = function( self, est, i )
+		est:ResetOperandState()
+		return self.objects[i]
+	end,
+	countElem = function( self )
+		return #self.objects
+	end,
+})
+
+--
+-- オブジェクトそれぞれが別のオペランドである
+--
+dev.operands = dev.new_class(dev.sum,
+{
+	__init = function( self, args )
+		dev.super_init( self, args )
+		
+		if args.relation then
+			self.rel = args.relation
+		else
+			self.rel = dev.fulfill{ function(est,...) return est:IsOperable(...) end }
+		end
+	end,
+	
+	-- インターフェース関数
+	--
+	Exists = function( self, est )
+		return self.rel:DoExists( est, self.priority, self )
+	end,
+	
+	Select = function( self, est )
+		local sels = self.rel:DoSelect( est, self.priority, self )
+		return dev.operand_container( sels )
+	end,
+	
+	GetMinMax = function( self, est )
+		local opi=est:CurOpState().cur_operand
+		local o=self.objects[opi]
+		if o then return o:GetMinMax(est) end
+	end,
+	
+	GetAll = function( self, est )
+		local opi=est:CurOpState().cur_operand
+		local o=self.objects[opi]
+		if o then return o:GetAll(est) end
+	end,
+	
+	-- メンバ関数
+	--
+	nextElem = function( self, est, i )
+		est:CurOpState(i):setCurOperand(i)
+		est:ResetOperandState()
+		return self.objects[i]
+	end,
+	countElem = function( self )
+		return #self.objects
+	end,
+})
+
+--
+dev.operand_container = dev.new_class(
+{
+	__init = function( self, val )
+		self.opr = dev.option_arg( val, {} )
+	end,
+	Format = function( self, val )
+		if dev.is_class( val, self ) then
+			self.opr = val.opr
+		elseif type(val) == "table" and not dev.is_class( val ) then
+			self.opr = val
+		else
+			self.opr = { val }
+		end
+	end,
+	GetTable = function( self )
+		return self.opr
+	end,
+})
+
+--
+--
+-- objects / operandで使う relation
+--
+-- 
+dev.independent = dev.new_class(
+{
+	DoExists = function( self, est, priority, parent )
+		est:SaveOperandState()
+	
+		local stack = {}
+		for _, i in ipairs(priority) do
+			local o=parent:nextElem( est, i )
+			if not o:Exists( est ) then
+				return false
+			end
+		end
+		return true
+	end,
+
+	DoSelect = function( self, est, priority, parent )
+		est:SaveOperandState()
+		
+		local stack = {}
+		for _, i in ipairs(priority) do
+			local o=parent:nextElem( est, i )
+			stack[i]=o:Select( est )
+		end
+		return stack
+	end,
+})
+
+
+--
+dev.fulfill = dev.new_class(
+{
+	__init = function(self, arg)
+		if type(arg)=="function" then
+			self.unexp = {}
+			self.rel = arg
+		else
+			self.unexp = dev.table.make_value_dict( dev.option_arg(arg.unexpand,{}) )
+			self.rel = arg[1]
+		end
+	end,
+	
+	--
+	CheckRelation = function( self, est, parent, stack, topidx )
+		local order = self:genDepthOrder( topidx, parent:countElem() )
+		
+		
+		local idx=order[1]
+		if self.unexp[idx] then
+			local args = {}
+			self:chkRelStep( 1, parent, stack, order, args, est )
+			return stack[idx]
+		else
+			local o=parent:nextElem(est, idx)
+			local g=o:GetAll( est )
+			stack[idx]=g
+			
+			return g:Filter(function(c) 
+				local args = { [idx] = c }
+				return self:chkRelStep( 2, parent, stack, order, args, est )
+			end, nil )
+		end
+	end,
+	
+	chkRelStep = function( self, i, parent, stack, order, args, est )
+		local ni=i+1
+		local idx=order[i]
+		
+		local gsel=stack[idx]
+		if gsel==nil then
+			local o=parent:nextElem(est, idx)
+			gsel=o:GetAll( est )
+			stack[idx]=gsel
+		end
+		
+		local unexp = self.unexp[idx]
+		
+		local tc=gsel:GetFirst()
+		while tc do
+			if unexp then
+				args[idx] = gsel
+			else
+				args[idx] = tc
+			end
+			
+			-- 次の階層へ
+			if order[ni]==nil then
+				local b=self.rel(est, table.unpack(args))
+				if b then
+					return true
+				end
+			elseif self:chkRelStep( ni, parent, stack, order, args, est ) then
+				return true
+			end
+			
+			if unexp then -- 失敗
+				break
+			else
+				tc=gsel:GetNext()
+			end
+		end
+		return false
+	end,
+	
+	genDepthOrder = function( self, i, cnt )
+		local preset = self.DepthOrderPresets[cnt]
+		if preset ~= nil then
+			return preset[i]
+		else
+			local tbl={i}
+			for j=1,cnt do
+				if j~=i then table.insert(tbl, j) end
+			end
+			return tbl
+		end
+	end,
+	
+	DepthOrderPresets = {
+		[1]={{1}},
+		[2]={{1,2}, {2,1}},
+		[3]={{1,2,3}, {2,1,3}, {3,1,2}},
+	},
+	
+	-- インターフェース関数
+	--
+	DoExists = function( self, est, priority, parent )
+		est:SaveOperandState()
+		
+		local stack = {}
+		for _, i in ipairs(priority) do
+			local o=parent:nextElem( est, i )
+			if not o:Exists( est ) then -- pieをチェックするために呼び出す
+				dev.print("failed:", i)
+				return false
+			end
+			local mi, mx=o:GetMinMax( est )
+			
+			 -- CheckRelation内でカレントのオペランドが変更される
+			local gsel=self:CheckRelation( est, parent, stack, i )
+			
+			--dev.print(g:GetCount(), "/", gsel:GetCount(), "/", mi, "-", mx)
+			if not gsel or gsel:GetCount() < mi then
+				return false
+			end			
+			stack[i] = gsel
+		end
+		return true
+	end,
+
+	--
+	DoSelect = function( self, est, priority, parent )
+		est:SaveOperandState()
+		
+		local stack = {}
+		for _, i in ipairs(priority) do
+			est:ResetOperandState()
+			local g=self:CheckRelation( est, parent, stack, i )
+			if g:GetCount()==0 then
+				return {}
+			end
+			
+			local o=parent:nextElem( est, i ) -- CheckRelation内でカレントのオペランドが変更される
+			est:OperandState().source = g
+			local gsel=o:Select( est )
+			stack[i] = gsel
+		end
+		return stack
+	end,
+})
+
+--[[
+self:MainOp{
+	dev.do_sendto_extra(),
+	dev.target_sel{
+		from = dev.mzone_card(dev.both),
+		filter = function(c, est) return c:IsType(TYPE_FUSION) end
+	}
+}
+
+self:SideOp{
+	dev.do_make_object{ function(self,g) local fusc=g:GetFirst() return fusc:GetMaterial(), fusc end },
+	dev.pick_all{
+		from = dev.op_operated( sendop ),
+		filter = function(c, est) return bit.band(c:GetSummonType(),SUMMON_TYPE_FUSION)==SUMMON_TYPE_FUSION end,
+	}
+}
+
+self:SideOp{
+	dev.do_special_summon(),
+	dev.pick_all{
+		from = dev.op_operated( fusmat, 1 )
+		location = dev.grave(dev.you),
+		filter = function(c, est)
+			return dev.bit.bcontain(c:GetReason(), 0x40008)
+			and c:GetReasonCard()==est:GetOpOperated( fusmat, 2 )
+			and not c:IsHasEffect(EFFECT_NECRO_VALLEY)
+		end,
+		pie = mpie:Consumer(),
+	}
+}
+
+function self.Operation(est)
+	if sendop(est):Done() then
+		if fusmat(est):Done() then
+			if spmat:Exists(est) and Duel.SelectYesNo then
+				Duel.BreakEffect()
+				spmat(est)
+			end
+		end		
+	end
+end
+
+function c95286165.activate(e,tp,eg,ep,ev,re,r,rp)
+	local tc=Duel.GetFirstTarget()
+	if not (tc:IsRelateToEffect(e) and tc:IsFaceup()) then return end
+	local mg=tc:GetMaterial()
+	local sumable=true
+	local sumtype=tc:GetSummonType()
+	if Duel.SendtoDeck(tc,nil,0,REASON_EFFECT)==0 or bit.band(sumtype,SUMMON_TYPE_FUSION)~=SUMMON_TYPE_FUSION or mg:GetCount()==0
+		or mg:GetCount()>Duel.GetLocationCount(tp,LOCATION_MZONE)
+		or mg:IsExists(c95286165.mgfilter,1,nil,e,tp,tc) then
+		sumable=false
+	end
+	if sumable and Duel.SelectYesNo(tp,aux.Stringid(95286165,0)) then
+		Duel.BreakEffect()
+		Duel.SpecialSummon(mg,0,tp,tp,false,false,POS_FACEUP)
+	end
+end
+]]--
+
+--
+-- オペレーションの引数
+--
+dev.op_operand = dev.new_class(
+{
+	__init = function( self, op, operand )
+		self.op = op
+		self.opr = dev.option_arg(operand, 1)
+	end,
+	
+	-- インターフェース関数
+	Select = function( self, est )
+		local r=est:GetOpState( self.op )
+		if r==nil then
+			est:OpDebugDisp("op_operand: キー=", self.op.key, "のオペレーションはまだ実行されていません")
+		end
+		return r:GetOperand( self.opr )
+	end,
+	Exists = function( self, est )
+		local r=est:GetOpCheck( self.op )
+		return r
+	end,
+	GetAll = function( self, est )
+		if est:GetOpState( self.op ) then
+			return self:Select( est )
+		else
+			local r=self.op:GetAllObject( est, self.opr )
+			return r[1]
+		end
+	end,	
+	GetMinMax = function( self, est )
+		local mi = 0
+		local mx = 0
+		if est:GetOpState( self.op ) then
+			mi = self:Select( est ):GetCount()
+			mx = mi
+		else
+			mi, mx=self.op:GetObjectMinMax( est, self.opr )
+		end
+		return mi, mx
+	end,
+	Location = function( self, est )
+		return self.op:GetObjectLocation( est, self.opr )
+	end,
+})
+
+--
+-- オペレーションの結果
+--
+dev.op_operated = dev.new_class(dev.op_operand,
+{
+	__init = function( self, op, operand )
+		dev.super_init( self, op, operand )
+	end,
+	
+	-- インターフェース関数
+	Select = function( self, est )
+		local r=est:GetOpState( self.op )
+		if r==nil then
+			est:OpDebugDisp("op_operated: キー=", self.op.key, "のオペレーションはまだ実行されていません")
+		end
+		return r:GetOperated( self.opr )
+	end,
+})
+
 
 --
 --
@@ -74,644 +764,33 @@ dev.tail_est_object_filter = dev.new_class(dev.head_est_object_filter,
 	end,
 })
 
-
 -- 
 -- ================================================================================
 --
---  !! 二次オブジェクト
+--  アクション
 --
 -- ================================================================================
 --
---
--- 選択されたオブジェクト
---
---[[
-	*min, *max | *count : number 
-	*from : object
-	select_player : = you
-	customhint : function = nil
-	pie : = nil
-	hintsel : = nil
-]]--
-dev.sel = dev.new_class(
-{
-	__init = function(self, args)	
-		self.o = args.from
-		self.selmin = dev.option_arg( args.min, args.count )
-		self.selmax = dev.option_arg( args.max, args.count )
-		self.select_player = dev.option_arg( args.player, dev.you )
-		self.customhint = args.hint
-		self.pie = args.pie
-		self.hintsel = args.hintsel
-		
-		dev.require( args, {{ from = true }} )
-		dev.require( self.selmin, dev.eval_able("number") )
-		dev.require( self.selmax, dev.eval_able("number") )
-	end,
-	
-	-- インターフェース関数
-	Exists = function( self, est, istarget )
-		local mi, mx = self:GetMinMax( est )
-		if not self.o:Exists( est, istarget, mi ) then
-			return false
-		end
-		
-		if self.pie then self.pie:Update( est, mi ) end
-		return true
-	end,
-	
-	-- ヒント表示、選択
-	Select = function( self, est, istarget, gsel )
-		local sp=self.select_player:GetPlayer(est)
-		self:HintSelect( est, sp )
-		
-		local mi, mx = self:GetMinMax( est )
-		local g
-		if self.o.SelectImpl then
-			g=self.o:SelectImpl( est, istarget, sp, mi, mx, gsel )
-		elseif not istarget then
-			g=self.o:Select( est, istarget ) -- 取り出して
-			g=g:Select( sp, mi, mx, nil )	 -- その中から選ぶ
-		elseif istarget then
-			dev.print(" 対象をとる効果の場合はselの代わりにtarget_selをお使いください ")
-		end
-		
-		if self.hintsel then
-			Duel.HintSelection( g ) -- g
-		end
-		
-		if self.pie then self.pie:Update( est, g:GetCount() ) end
-		return g
-	end,
-	
-	GetAll = function( self, est, istarget )
-		return self.o:GetAll( est, istarget )
-	end,
-	
-	GetMinMax = function( self, est )
-		local mi = dev.eval( self.selmin, est )
-		local mx = dev.eval( self.selmax, est )
-		if self.pie then
-			mx = math.min( mx, self.pie:Get( est ) )
-			mi = math.min( mi, mx )
-			if mx==0 then
-				est:OpDebugDisp(self,":選択可能なオブジェクトが0になりました")
-			end
-		end
-		return mi, mx
-	end,
-	
-	Location = function( self, est )
-		return self.o:Location(est)
-	end,
-	
-	Reselect = function( self, est, gsel, selcnt )
-		local sp=self.select_player:GetPlayer(est)
-		self:HintSelect( est, sp, true )
-		return self.o:Select( est, false, sp, selcnt, selcnt, gsel )
-	end,
-	
-	-- メンバ関数
-	HintSelect = function( self, est, tp )
-		local ophint = nil
-		if est:HasOpState() then ophint = est:TopOp():GetHint() end
-		
-		if self.customhint~=nil then
-			self.customhint( tp, ophint )
-		else
-			Duel.Hint( HINT_SELECTMSG, tp, ophint )
-		end
-	end,
-})
-
---
--- 上限を超えていた場合のみ選択する
---
-dev.lim_sel = dev.new_class(dev.sel,
-{
-	
-
-})
-
---
--- 一つ一つ選ぶ
---
-dev.step_sel = dev.new_class(dev.sel,
-{
-	__init = function(self, args)
-		dev.super_init(self, args)
-		self.rel = args.binary_relation
-		self.ask = dev.option_arg(args.on_proceed, self.DefOnProceed) -- function( i ) -> bool
-		self.askstr = dev.option_arg(args.on_proceed_string, 560)
-	end,
-	
-	-- 
-	Exists = function( self, est, istarget )
-		local all=self:GetAll(est, istarget)
-		local mi, mx = self:GetMinMax(est, istarget)
-		
-		local hit=0
-		local tc=all:GetFirst()
-		while tc do
-			local rem=all:Clone()
-			rem:Remove(tc)
-			local uc=rem:GetFirst()
-			while uc do
-				if self:CheckRelation(tc, uc) then
-					hit = hit + 1
-					if hit>=mi then
-						return true
-					end
-				end
-				uc=rem:GetNext()
-			end
-			tc=all:GetNext()
-		end
-		return false
-	end,
-	
-	Select = function( self, est, istarget )
-		local sp=self.select_player:GetPlayer( est )
-		local all=self:GetAll( est, istarget )
-		
-		local gsel=Group.CreateGroup()
-		while true do
-			self:HintSelect( est, sp )
-
-			local g=self.o:Select( est, istarget, sp, 1, 1, all )
-			if self.hintsel then
-				Duel.HintSelection( g )
-			end
-			
-			local c=g:GetFirst()
-			gsel:AddCard(c)
-			
-			local mi, mx = self:GetMinMax(est)
-			if mx <= gsel:GetCount() then
-				break
-			elseif mi <= gsel:GetCount() then
-				if not self:ask( est, gsel:GetCount(), mi, mx ) then
-					break
-				end
-			end
-			all = all:Filter(function(tc) return self:CheckRelation(c,tc) end, c)
-		end
-		return gsel
-	end,
-	
-	--
-	CheckRelation = function( self, l, r )
-		if self.rel==nil then return true end
-		return self.rel(l,r)
-	end,
-	
-	DefOnProceed = function( self, est )
-		local selp=self.select_player:GetPlayer(est)
-		return Duel.SelectYesNo( selp, self.askstr )
-	end,
-})
-
---
--- ～を含むカードを選択
---
-
---
--- ランダムなカード
---
-dev.random_pick = dev.new_class(dev.sel,
+dev.do_let_object = dev.new_class(dev.action,
 {
 	__init = function( self, args )
-		dev.super_init( self, args )
+		self.fn = dev.option_field( args, 1 )
 	end,
 	
-	-- ヒント表示、選択
-	Select = function( self, est, istarget )
-		local sp=self.select_player:GetPlayer(est)
-		self:HintSelect( est, sp )
-		
-		local gall=self.o:GetAll( est, istarget )
-		
-		local mi, mx = self:GetMinMax( est ) -- mi==mx
-		local g=gall:RandomSelect( sp, mx )
-		
-		if self.hintsel then
-			Duel.HintSelection( g )
-		end
-		
-		if self.pie then self.pie:Update( g:GetCount() ) end
-		return g
-	end,
-})
-
---
--- オブジェクトをまとめて一つのオペランドに流し込む
---
-dev.object_set = dev.new_class(
-{
-	__init = function(self, args)
-		if args.relation then
-			self.rel = args.relation
-		else
-			self.rel = dev.independent()
-		end
-		
-		self.priority = dev.option_arg(args.priority, {})
-		self.parameter = dev.option_arg(args.parameter, {})
-		
-		self.objects = {}
-		for i, o in ipairs(args) do
-			self.objects[i] = o
-			if self.priority[i]==nil then
-				self.priority[i]=i
-			end
-		end
-	end,
-	
-	-- インターフェース関数	
-	--
-	Exists = function( self, est, istarget )
-		return self.rel:DoExists( est, istarget, self.priority, self )
-	end,
-	
-	Select = function( self, est, istarget )
-		local sels = self.rel:DoSelect( est, istarget, self.priority, self )
-		for _, i in ipairs(self.parameter) do
-			sels[i] = nil
-		end		
-		return dev.Group.FlatGroups(sels)
-	end,
-	
-	GetMinMax = function( self, est )
-		local mi, mx=0, 0
-		for i, o in ipairs(self.objects) do
-			local mmi, mmx = o:GetMinMax(est)
-			mi = mi + mmi
-			mx = mx + mmx
-		end
-		return mi, mx
-	end,
-	
-	Reselect = function( self, est, gsel, selcnt )
-		-- 先頭オブジェクトのReselectを使用する
-		return self.objects[1]:Reselect( est, gsel, selcnt )
-	end,
-	
-	--
-	nextElem = function( self, est, i )
-		return self.objects[i]
-	end,
-	countElem = function( self )
-		return #self.objects
-	end,
-})
-
---
--- オブジェクトそれぞれが別のオペランドである
---
-dev.operands = dev.new_class(dev.object_set,
-{
-	__init = function( self, args )
-		dev.super_init( self, args )
-		
-		if args.relation then
-			self.rel = args.relation
-		else
-			self.rel = dev.each_related(dev.IsOperable)
-		end
-	end,
-	
-	-- インターフェース関数
-	--
-	Exists = function( self, est, istarget )
-		return self.rel:DoExists( est, istarget, self.priority, self )
-	end,
-	
-	Select = function( self, est, istarget )
-		local sels = self.rel:DoSelect( est, istarget, self.priority, self )
-		return dev.operand_container( sels )
-	end,
-	
-	GetMinMax = function( self, est, operand_index )
-		local o=self.objects[operand_index]
-		if o then return o:GetMinMax(est) end
-	end,
-	
-	GetAll = function( self, est, operand_index )
-		local o=self.objects[operand_index]
-		if o then return o:GetAll(est) end
-	end,
-	
-	-- メンバ関数
-	--
-	nextElem = function( self, est, i )
-		est:TopOpState():setCurOperand(i)
-		return self.objects[i]
-	end,
-	countElem = function( self )
-		return #self.objects
-	end,
-})
-
---
-dev.operand_container = dev.new_class(
-{
-	__init = function( self, val )
-		self.opr = dev.option_arg( val, {} )
-	end,
-	Format = function( self, val )
-		if dev.is_class( val, self ) then
-			self.opr = val.opr
-		elseif type(val) == "table" and not dev.is_class( val ) then
-			self.opr = val
-		else
-			self.opr = { val }
-		end
-	end,
-	GetTable = function( self )
-		return self.opr
-	end,
-})
-
---
---
--- objects / operandで使う relation
---
--- 
-dev.independent = dev.new_class(
-{
-	DoExists = function( self, est, istarget, priority, parent )
-		local stack = {}
-		for _, i in ipairs(priority) do
-			local o=parent:nextElem( est, i )
-			if not o:Exists( est, istarget ) then
-				return false
-			end
-		end
-		return true
-	end,
-
-	DoSelect = function( self, est, istarget, priority, parent )
-		local stack = {}
-		for _, i in ipairs(priority) do
-			local o=parent:nextElem( est, i )
-			stack[i]=o:Select( est )
-		end
-		return stack
-	end,
-})
-
-
---
-dev.each_related = dev.new_class(
-{
-	__init = function(self, arg)
-		if type(arg)=="function" then
-			self.unexp = {}
-			self.rel = arg
-		else
-			self.unexp = dev.table.make_value_dict( dev.option_arg(arg.unexpand,{}) )
-			self.rel = arg[1]
-		end
-	end,
-	
-	--
-	CheckRelation = function( self, est, istarget, parent, stack, topidx )
-		local order = self:genDepthOrder( topidx, parent:countElem() )
-		
-		local args = {}
-		
-		local idx=order[1]
-		if self.unexp[idx] then
-			self:checkRelation( 1, parent, stack, order, args, est, istarget )
-			return stack[idx]
-		else
-			local o=parent:nextElem(est, idx)
-			local g=o:GetAll(est, istarget)
-			stack[idx]=g
-			
-			return g:Filter( function( c, a ) 
-				a[idx] = c
-				return self:checkRelation( 2, parent, stack, order, a, est, istarget )
-			end, nil, args )
-		end
-	end,
-	
-	checkRelation = function( self, i, parent, stack, order, args, est, istarget, retargs )
-		local ni=i+1
-		local idx=order[i]
-		--dev.print_table(stack, "stack-"..tostring(i))
-		--dev.print_table(args, "args-"..tostring(i))
-		--dev.print("cur objindex=",tostring(idx))
-		--dev.print("----------------------------")
-		
-		local gsel=stack[idx]
-		if gsel==nil then
-			local o=parent:nextElem(est, idx)
-			gsel=o:GetAll(est, istarget)
-			stack[idx]=gsel
-		end
-		
-		local unexp = self.unexp[idx]
-		
-		local tc=gsel:GetFirst()
-		while tc do
-			if unexp then
-				args[idx] = gsel
+	Execute = function( self, est, ... )
+		local st = est:CurOpState()
+		if st then
+			local r 
+			if self.fn then
+				r = { self.fn( ... ) }
 			else
-				args[idx] = tc
+				r = { ... }
 			end
-			
-			-- 次の階層へ
-			if order[ni]==nil then
-				--dev.print_val("pre-rel ", idx, self.unexp[idx], args[1], args[2], args[3], args[4])
-				local b=self.rel(est, table.unpack(args))
-				--dev.print("Try: ",dev.option_val(b,"Ok","Fail"),", ", dev.typestr(args[1]), ", ", dev.typestr(args[2]))
-				if b then
-					return true
-				end
-			elseif self:checkRelation( ni, parent, stack, order, args, est, istarget ) then
-				return true
-			end
-			
-			if unexp then -- 失敗
-				break
-			else
-				tc=gsel:GetNext()
-			end
+			st:setOperated( r )
 		end
-		return false
-	end,
-	
-	genDepthOrder = function( self, i, cnt )
-		local preset = self.DepthOrderPresets[cnt]
-		if preset ~= nil then
-			return preset[i]
-		else
-			local tbl={i}
-			for j=1,cnt do
-				if j~=i then table.insert(tbl, j) end
-			end
-			return tbl
-		end
-	end,
-	
-	DepthOrderPresets = {
-		[1]={{1}},
-		[2]={{1,2}, {2,1}},
-		[3]={{1,2,3}, {2,1,3}, {3,1,2}},
-	},
-	
-	-- インターフェース関数
-	--
-	DoExists = function( self, est, istarget, priority, parent )
-		local stack = {}
-		for _, i in ipairs(priority) do
-			local o=parent:nextElem(est, i)
-			if not o:Exists(est, istarget) then -- pieをチェックするために呼び出す
-				dev.print("failed:", i)
-				return false
-			end
-			local mi, mx=o:GetMinMax(est) 
-			
-			 -- CheckRelation内でカレントのオペランドが変更される
-			local gsel=self:CheckRelation( est, istarget, parent, stack, i )
-			
-			--dev.print(g:GetCount(), "/", gsel:GetCount(), "/", mi, "-", mx)
-			
-			if not gsel or gsel:GetCount() < mi then
-				return false
-			end			
-			stack[i] = gsel
-		end
-		return true
-	end,
-
-	--
-	DoSelect = function( self, est, istarget, priority, parent )
-		local stack = {}
-		for _, i in ipairs(priority) do
-			local g=self:CheckRelation( est, istarget, parent, stack, i )
-			if not g then
-				return {}
-			end
-			
-			local o=parent:nextElem(est, i) -- CheckRelation内でカレントのオペランドが変更される
-			local gsel=o:Select( est, istarget, g )			
-			stack[i] = gsel
-		end
-		return stack
-	end,
-})
-
---
--- オペレーションの結果
---
-dev.operation_result = dev.new_class(
-{
-	__init = function( self, op, operand )
-		self.op = op
-		self.opr = dev.option_arg(operand, 1)
-	end,
-	
-	-- インターフェース関数
-	Select = function( self, est )
-		local r=est:GetOpResult( self.op )
-		if r==nil then
-			est:OpDebugDisp("operation_result: キー=", self.op.key, "のオペレーションはまだ実行されていません")
-		end
-		return r:GetOperand( self.opr )
-	end,
-	Exists = function( self, est )
-		local r=est:GetOpCheck( self.op )
-		return r
-	end,
-	GetAll = function( self, est )
-		local r=est:GetOpResult( self.op )
-		if r~=nil then
-			return self:Select( est )
-		else
-			local r=est:InvokeOp( self.op, function(o, es) 
-				return o:GetAllObject( est, self.opr ) 
-			end)
-			return r[1]
-		end
-	end,	
-	GetMinMax = function( self, est )
-		local mi = 0
-		local mx = 0
-		local r=est:GetOpResult( self.op )
-		if r~=nil then
-			mi = self:Select( est ):GetCount()
-			mx = mi
-		else
-			mi, mx=est:InvokeOp( self.op, function(o, es) 
-				return o:GetObjectMinMax( est, self.opr ) 
-			end)
-		end
-		return mi, mx
-	end,
-	Location = function( self, est )
-		return self.op:GetObjectLocation( est, self.opr )
+		return 1
 	end,
 })
 
 
---
--- 効果対象となるオブジェクト
---
-dev.target_sel = dev.new_class(
-{
-	__init = function(self, a1, a2)
-		if a2==nil then
-			self.index = 1
-			self.base = a1
-		else 
-			self.index = a1
-			self.base = a2
-		end
 
-		if not dev.is_class(self.base) then
-			local cls=dev.option_arg(self.base.class, dev.sel)
-			self.base=cls(self.base)
-		end
-	end,
-
-	-- インターフェース関数
-	Select = function( self, est, _istarget, gsel ) -- このSelectは対象決定時と効果解決時の２度呼ばれる
-		local tg=nil
-		if est.timing == dev.ontarget then
-			tg=self.base:Select( est, true, gsel )
-			est:GetEffectClass():TellTargetPart( est, self.index, tg )
-			
-		elseif est.timing == dev.onoperation then	
-			tg=est:GetTarget( self.index )
-			if tg==nil then
-				est:OpDebugDisp("Failed effect_state.GetTarget")
-				return nil
-			end
-			
-			-- 必要ならReselect
-			local mi, mx = self.base:GetMinMax( est )
-			if mx<tg:GetCount() then
-				tg=self.base:Reselect( est, tg, mx )
-			end
-		end
-		return tg
-	end,
-	
-	Exists = function( self, est )
-		return self.base:Exists( est, true )
-	end,
-	
-	GetAll = function( self, est )
-		return self.base:GetAll( est, true )
-	end,	
-	
-	GetMinMax = function( self, est )
-		return self.base:GetMinMax( est )
-	end,
-	
-	Location = function( self, est )
-		return self.base:Location( est )
-	end,
-})

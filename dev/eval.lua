@@ -1,22 +1,15 @@
 --
--- =====================================================================
 --
---  !! 遅延評価
+--  eval
 --
--- =====================================================================
 --
 
--- 評価
+-- 値ならそのまま、関数ならf(...)を実行、テーブルならt:Eval(...)を実行する
 function dev.eval( val, ... )
 	local t=type(val)
 	if t=="table" then
 		if val.Eval==nil then 
-			local d2=debug.getinfo(2)
-			local d3=debug.getinfo(3)
-			local d4=debug.getinfo(4)
-			dev.print_val(d2.linedefined, d3.linedefined, d4.linedefined)
-			dev.print_table(val)
-			dev.print(val.__classname, ":Eval関数がありません") 
+			dev.print(val.__classname, ":Eval関数がありません")
 			return nil
 		else 
 			return val:Eval(...) 
@@ -28,7 +21,7 @@ function dev.eval( val, ... )
 	end
 end
 
---
+-- 
 dev.expr = dev.new_class(
 {
 	__init = function( self, args )
@@ -69,7 +62,7 @@ dev.eq0 = dev.bindexpr( function(a) return a==0 end )
 dev.ne0 = dev.bindexpr( function(a) return a~=0 end )
 dev.gt0 = dev.bindexpr( function(a) return a>0 end )
 
---
+-- requrieで使える
 function dev.eval_able(class)
 	return { class, { Eval="function" } }
 end

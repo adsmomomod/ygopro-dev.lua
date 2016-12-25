@@ -1,20 +1,30 @@
 --
--- ===============================================================================-
+-- ================================================================================
 --
--- !! オペレーション
+-- オペレーション = アクション + オペランド（オブジェクトを入れるとこ）
 -- 
--- ===============================================================================
+-- ================================================================================
 --
--- check_timing
 -- Check
--- Target
 -- Execute
--- IsTakeTarget
+-- ExecuteAction
 -- GetHint
--- DebugDisp
 --
+for _, k in ipairs({"Select", "Exists", "Count", "GetMinMax", "Location", "GetAll"}) do
+	dev[k.."Operand"] = function( o, est, operand_args, op_state )
+		local f=o[k]
+		est:pushOpStackFrame( op_state, operand_args )
+		local r=f( o, est )
+		est:popOpStackFrame()
+		return r
+	end
+end
 
+
+--
 -- カードを操作する
+-- dev.op{ action, operand, debug="aaa" }
+--
 dev.op = dev.new_class(
 {
 	__init = function( self, args )
@@ -28,16 +38,36 @@ dev.op = dev.new_class(
 	end,
 	
 	--
+	-- estに自身を積む
+	-- 
+	beginOp = function( self, est, opdidx, oprst )
+		if self.key==nil then
+			dev.print("オペレーションに識別IDがありません AddOperationの使用漏れを確認してください")
+			return nil
+		end	
+		local ops = est:newOpState( self.key, self )
+		if opdidx then
+			ops:setCurOperand( opdidx )
+		end
+		est:pushOpStackFrame( ops, oprst )
+		return ops
+	end,
+	exitOp = function( self, est, r )
+		est:popOpStackFrame()
+		return r
+	end,
+	
+	--
 	-- インターフェース関数
 	--
 	-- Check
-	Check = function( self, est )
-		local opst=self:pushSelf(est)
-		local ret=false
+	Check = function( self, est, oprst )
+		local opst = self:beginOp( est, 1, oprst )
 		
-		if not self:chkOperand( est ) then
+		local ret=false
+		if not self:chkOperand( est, opst ) then
 			self:DebugDisp( est, "Check failed: オペランド" )
-		elseif self.action.Check~=nil and self.action:Check(est) then
+		elseif self.action.Check~=nil and self.action:Check( est ) then
 			self:DebugDisp( est, "Check failed: action.Check" )
 		else
 			self:DebugDisp( est, "Check Ok" )
@@ -45,21 +75,22 @@ dev.op = dev.new_class(
 		end
 		
 		opst:setCheckResult( ret )
-		return ret
+		return ret, self:exitOp(est)
 	end,
 	
 	-- Execute
 	-- 	ocs : {[1]:grp, [2]:grp}
-	Execute = function( self, est, ocs )
-		return self:ExecuteAction( est, ocs )
+	Execute = function( self, est, oprst )
+		return self:ExecuteAction( est, oprst )
 	end,
 	
 	--
-	ExecuteAction = function( self, est, ocs )
-		local opst = self:pushSelf( est )
+	ExecuteAction = function( self, est, oprst )
+		local opst = self:beginOp( est, 1, oprst )
 		
 		-- 対象決定
-		local operands=self:selOperand( est, ocs ) 
+		local operands=self:selOperand( est ) 
+		opst:setOperand( operands )
 		
 		-- 動作実行
 		local ops = operands:GetTable()
@@ -70,13 +101,18 @@ dev.op = dev.new_class(
 				end
 			end
 		end
-		local cnt, other = self.action:Execute( est, table.unpack(ops) )
+		local cnt = self.action:Execute( est, table.unpack(ops) )
 		
 		-- 結果保存
-		local ret = dev.op_result( cnt, operands, other )
-		opst:setResult( ret )
-		self:DebugDisp( est, "Execute完了: cards=", ret.count, " ret=", dev.valstr(ret.value) )
-		return ret
+		opst:setOperatedCount( cnt )
+		if opst.operated==nil then
+			local g=Duel.GetOperatedGroup()
+			opst:setOperated{g}
+		end
+		
+		self:DebugDisp( est, "Execute完了: cards=", opst:GetOperatedCount() )
+		self:exitOp(est)
+		return opst
 	end,
 	
 	-- ヒントコード
@@ -93,29 +129,26 @@ dev.op = dev.new_class(
 	end,
 	
 	chkOperableObjectSep = function( self, est, obj, operand )
-		if not self.action.CheckOperableSep( est, obj, operand ) then
+		if not self.action:CheckOperableSep( est, obj, operand ) then
 			self:DebugDisp( est, "op.CheckOperableSep Failed: operand=", operand )
 			return false
 		end
 		return true
 	end,
 	
-	-- Check:カスタムポイント オペランドがそろっているか確認
+	-- オペランドがそろっているか確認
 	chkOperand = function( self, est )
 		if self.operand==nil then return true end
 		return self.operand:Exists( est )
 	end,
 	
 	-- 操作対象となるカードを選ぶ
-	selOperand = function( self, est, ocs )
-		if ocs~=nil then
-			if type(ocs)~="table" then ocs={ocs} end
-			est:TopOpState():SetArgument( ocs )
-		end	
-
+	selOperand = function( self, est )
 		local opc=dev.operand_container()
 		if self.operand~=nil then
+			--dev.hook_line_locals(2)
 			local ret=self.operand:Select( est )
+			debug.sethook()
 			if ret==nil then 
 				self:DebugDisp( est, "操作対象の取得に失敗" )
 			end
@@ -128,35 +161,32 @@ dev.op = dev.new_class(
 	-- その他のメンバ関数
 	--
 	-- cnt, cnt / min, max を返す
-	GetObjectMinMax = function( self, est, opdidx )
-		self:pushSelf(est)
+	GetObjectMinMax = function( self, est, opdidx, oprst )
+		local opst = self:beginOp( est, opdidx, oprst )
 		local c1, c2 = 0, 0
-		if self.operand and self.operand.GetMinMax then
-			c1, c2 = self.operand:GetMinMax( est, opdidx )
-		elseif self.operand and self.operand.Count then
-			c1=self.operand:Count( est, false, opdidx )
-			c2=c1
+		if self.operand then
+			if self.operand.GetMinMax then
+				c1, c2 = dev.GetMinMaxOperand( self.operand, est )
+			elseif self.operand.Count then
+				c1 = dev.CountOperand( self.operand, est )
+				c2 = c1
+			end
 		end
+		self:exitOp( est )
 		return c1, c2
 	end,
 	
 	-- オブジェクトの領域をまとめて返す
-	GetObjectLocation = function( self, est, opdidx )
-		self:pushSelf(est):setCurOperand(opdidx)
+	GetObjectLocation = function( self, est, opdidx, oprst )
+		local opst = self:beginOp( est, opdidx, oprst )
 		if self.operand==nil then return dev.location_info() end
-		return self.operand:Location( est, opdidx )
+		return self:exitOp( est, self.operand:Location(est) )
 	end,
 	
-	-- 操作対象となるカードを取得
-	GetAllObject = function( self, est, opdidx )
-		self:pushSelf(est)
-		local r=self.operand:GetAll( est, false, opdidx )	
-		return r
-	end,
-	
-	-- アクションのとる引数の数
-	GetActionArity = function( self )
-		return self.action.arity
+	-- 操作対象となるカードをすべて取得
+	GetAllObject = function( self, est, opdidx, oprst )
+		local opst = self:beginOp( est, opdidx, oprst )
+		return self:exitOp( est, self.operand:GetAll(est) )	
 	end,
 	
 	-- フラグ
@@ -165,19 +195,6 @@ dev.op = dev.new_class(
 	end,
 	TestFlag = function( self, f )
 		return bit.btest( self.flags, f )
-	end,
-	
-	--
-	-- プライベート関数
-	--	
-	-- estに自身を積む
-	pushSelf = function( self, est )
-		if self.key==nil then
-			dev.print("オペレーションに識別IDがありません AddOperationの使用漏れを確認してください")
-			return nil
-		end	
-		local ops = est:pushOpState( self.key, dev.operation_state(self) )
-		return ops
 	end,
 	
 	--
@@ -208,125 +225,154 @@ dev.op = dev.new_class(
 }) 
 
 --
--- Operationの返り値
 --
-dev.op_result = dev.new_class(
-{
-	__init = function( self, cnt, opr, other )
-		self.count = cnt
-		self.operand = opr
-		self.param = other
-	end,	
-	GetOperand = function( self, i )
-		return self.operand:GetTable()[dev.option_arg(i,1)]
-	end,
-	GetCount = function( self )
-		return self.count
-	end,
-	GetResult = function( self )
-		return self.param
-	end,
-	Done = function( self, val )
-		if val then return self.count>=val
-		else return self.count>0 end
-	end,
-})
-
--- 
--- ================================================================================
+--  条件 - Checkに関してはdev.opと同様に扱える
 --
---  !! 条件
---
--- ================================================================================
 --
 -- オブジェクトの数を調べる
-dev.cond_count = dev.new_class(
+dev.count_operand = dev.new_class(
 {
 	__init = function( self, args )
 		dev.require( args, "table" )
-		local istarget = dev.option_arg( args.istarget, false )
-		
-		local oprs = {}
-		for i, a in ipairs(args) do
+		self.oargs = {}
+		for k, a in pairs(args) do
+			local i=tonumber(k)
 			if i==1 then
-				self.func = a
-			elseif type(a)=="table" and a.Count then
-				table.insert( oprs, function(est) return a:Count( est, istarget ) end )
+				self.o = a
 			else
-				table.insert( oprs, a )
+				self.oargs[k] = a
 			end
 		end
-		if self.func then
-			self.func = self.func(oprs)
-		end
-		dev.print_table(oprs,"oprs")
 	end,
-
+	
 	-- Check
 	Eval = function( self, est )
-		if self.func then
-			return self.func:Eval( est )
-		end
+		return dev.CountOperand( self.o, est, self.oargs )
 	end,
 })
 
 -- 指定数以上存在する
-dev.cond_exist = dev.new_class(
+dev.cond_exist = dev.new_class(dev.count_operand,
 {
 	__init = function( self, args )
-		dev.require( args, "table" )
-		self.o = args[1]
-		self.istarget = dev.option_arg( args.istarget, false )
-		self.cnt = args.count
+		dev.super_init( self, args )
 	end,
 
 	-- Check
 	Eval = function( self, est )
-		return self.o:Exists( est, self.istarget, self.cnt )
+		return dev.ExistsOperand( self.o, est, self.oargs )
 	end,
 })
 
 -- 存在しない
-dev.cond_none_exist = dev.new_class(
+dev.cond_none_exist = dev.new_class(dev.count_operand,
 {
 	__init = function( self, args )
-		dev.require( args, "table" )
-		self.o = args[1]
-		self.istarget = dev.option_arg( args.istarget, false )
+		dev.super_init( self, args )
 	end,
 
 	-- Check
 	Eval = function( self, est )
-		return not self.o:Exists( est, self.istarget )
+		return not dev.ExistsOperand( self.o, est, self.oargs )
 	end,
 })
 
 -- 
 -- ================================================================================
 --
---  !! オブジェクト
+--  オブジェクト - ある操作の対象となる何か（カード、ライフ、チェーンなど）
 --
 -- ================================================================================
 --
---  コンセプト
--- : Exists est
--- : Select est
--- : GetAll est
--- : GetMinMax est
--- : Location est
+-- : Exists
+-- : Select
+-- : GetAll
+-- : GetMinMax
+-- : Location
 --
+dev.primal_object = dev.new_class(
+{
+	-- メンバ関数	
+	GetAll = function(self, est)
+		local gsrc=self:getOutSource(est)
+		if gsrc then
+			return gsrc
+		else
+			return self:GetAllObject( est )
+		end
+	end,
+	
+	Count = function(self, est)
+		local gsrc=self:getOutSource(est)
+		if gsrc then
+			return gsrc:GetCount()
+		else
+			return self:CountObject( est )
+		end
+	end,
+	
+	GetMinMax = function(self, est)
+		return 1, self:Count(est)
+	end,
+	
+	Exists = function( self, est )
+		local reqnum = dev.option_arg(est:OperandState().min, 1)
+		local gsrc=self:getOutSource(est)
+		if gsrc then
+			return reqnum <= gsrc:GetCount()
+		else
+			return self:ExistsObject( est, reqnum )
+		end
+	end,
+	
+	Select = function( self, est )
+		return self:GetAll(est)
+	end,
+	
+	SelectImpl = function( self, est )
+		local tp = est:OperandState().select_player
+		
+		local selmax = est:OperandState().max
+		if selmax==nil then selmax=self:Count(est) end
+		
+		local selmin = est:OperandState().min
+		if selmin==nil then selmin=1 end
+		
+		local gsrc=self:getOutSource(est)
+		return self:SelectImplObject( est, tp, selmin, selmax, gsrc )
+	end,
+	
+	Location = function(self, est)
+		return dev.location_info()
+	end,
+	
+	Match = function(self, c, est)
+		local f = self:GetFilter(est)
+		return f(c, est)
+	end,
+	
+	--
+	getOutSource = function(self, est)
+		local gsrc=est:OperandState().source
+		if gsrc then
+			gsrc=gsrc:Filter( self:GetFilter(est), self:GetException(est), est )
+			return gsrc
+		end
+		return nil
+	end,
+})
 
 --
 -- =====================================================================
 --
---  !! カード・チェーン等に対して行う操作をオブジェクト化
+--  アクション - 破壊する、サーチする、失う、無効にするなどの操作
 --
 -- =====================================================================
 --
 -- CheckOperable		( self, est, c, operand-id ) -> boolean
--- Execute				( self, est, operand1, operand2... ) -> operated_count, another_operation_result
--- DoCheck				[opt]
--- OperationInfoParams	[opt] return ( Param, Player )
+-- Execute				( self, est, operand1, operand2... ) -> operated_count, [opt]another_operation_result
+-- DoCheck				[opt] ( self, est )
+-- OperationInfoParams	[opt] ( self, est ) -> Param, Player
 --
 
 -- action 基底クラス
@@ -337,13 +383,13 @@ dev.action = dev.new_class(
 		self.hint 		= hint
 		self.arity 		= dev.option_arg(arity,1)
 	end,
-	CheckOperable = function() 
+	CheckOperable = function(self, est) 
 		return true
 	end,
-	CheckOperableSep = function(self, o, opr)
+	CheckOperableSep = function(self, est, o, opr)
 		if self.arity==1 then
-			return self:CheckOperable(o)
-		else
+			return self:CheckOperable(est, o)
+		elseif self.arity>1 then
 			return true
 		end
 	end,

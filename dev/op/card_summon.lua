@@ -42,13 +42,13 @@ dev.do_special_summon = dev.new_class(dev.action,
 	-- インターフェース関数
 	--
 	CheckOperable = function(self, est, c)
-		local sump=self.sumplayer:GetPlayer(est)
+		local sump=dev.eval(self.sumplayer,est)
 		return c:IsCanBeSpecialSummoned(est:GetEffect(), self.sumtype, sump, self.nocheck, self.nolimit)
 	end,
 	
 	Execute = function(self, est, g) 
-		local sump=self.sumplayer:GetPlayer(est)
-		local sumtp=self.sumtgplayer:GetPlayer(est)
+		local sump=dev.eval(self.sumplayer,est)
+		local sumtp=dev.eval(self.sumtgplayer,est)
 		return Duel.SpecialSummon(g, self.sumtype, sump, sumtp, self.nocheck, self.nolimit, self.sumpos)
 	end,
 	
@@ -57,7 +57,7 @@ dev.do_special_summon = dev.new_class(dev.action,
 		--for i, cl in ipairs(self.cards) do
 		--	l = bit.bor(l, bit.bor(cl.location1, cl.location2))
 		--end
-		return l, self.sumplayer:GetPlayer(est)
+		return l, dev.eval(self.sumplayer,est)
 	end,
 })
 
@@ -86,7 +86,7 @@ dev.do_synchro_summon = dev.new_class(dev.action,
 	--	
 	Execute = function(self, est, syn, mat) 
 		local c=syn:GetFirst()
-		local sump=self.sumplayer:GetPlayer(est)
+		local sump=dev.eval(self.sumplayer,est)
 		if self.tunerspec then
 			local tuner=mat:GetFirst()
 			Duel.SynchroSummon( sump, c, tuner )

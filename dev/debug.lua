@@ -1,40 +1,66 @@
 --  
 --
--- デバッグ
+-- デバッグ用関数
 --
 --
 
--- フック
-function dev.hook_disp(p,l)
-	local msg=":"
-	local fname = debug.getinfo(2).name
-	if fname~=nil then
-		msg=msg..fname
-	end
-	if l~=nil then
-		msg=msg..":"..tostring(l)
-	end
-	dev.print("[hook]"..p..msg)
-end
-function dev.hook_call()
-	debug.sethook(dev.hook_disp, "c")
-	--debug.sethook(dev.hook_disp, "r")
-end
+-- 実行中の行を垂れ流す
 function dev.hook_line()
 	debug.sethook(function(p,l)
 		local d=debug.getinfo(2)
 		local spath=d.source
-		dev.print( spath..":"..tostring(d.currentline) )		
+		dev.print( spath..":"..tostring(d.currentline) )
 	end, "l")
+end
+function dev.hook_line_locals(lv)
+	debug.sethook(function(p,l)
+		local d=debug.getinfo(2)
+		local spath=d.source
+		dev.print( spath..":"..tostring(d.currentline) )
+		dev.print_locals(2,2+lv)
+	end, "l")	
+end
+
+-- 
+function dev.print_locals(lv,lvmax)
+	local lvstart=2+dev.option_arg(lv,0)
+	lvmax=dev.option_arg(lvmax,999)
+    -- レベルをめぐる
+    for level=lvstart,lvmax do
+        local d=debug.getinfo(level)
+        if d==nil then
+            break
+        end
+        dev.print("------ level-"..tostring(level).."("..tostring(d.linedefined)..") ---------------")
+        
+        -- ローカル変数を列挙
+        local n=1
+        local v
+        for i=1,999 do
+            n,v=debug.getlocal(level, i)
+            if n==nil then
+                break
+            end
+            dev.print( ">", n, " [", dev.typestr(v), "]" )
+			if type(v)=="atable" then
+				dev.print_table(v,n,0)
+			else
+				dev.print(v)
+			end
+	    end
+		
+		dev.print("")
+    end
 end
 
 --[[
 	引数を検証する
 
-	値, とりうる型名, [必要なメンバ名]
-	dev.assert( c, {{ Eval = "function" }} )
-	dev.assert( val, "table" )
-	dev.assert( num )
+	値, とりうる型名/メンバ名テーブル
+	dev.require( val, "number" )				= numberを要求
+	dev.require( num )							= nilでないことを要求
+	dev.require( c, {{ Eval = "function" }} )	= functionであるEvalというフィールドを持つテーブルを要求
+	dev.require( val, {"number","userdata"} )	= numberまたはuserdataを要求
 ]]--
 function dev.require_impl( val, typename, valname, cxt )
 	if valname==nil then valname="" end 
@@ -98,29 +124,74 @@ function dev.enable_require()
 end
 dev.require = function(...) return true end -- 普段はここに転送、なにもしない
 
-
---
--- devの
---
-function dev.debug_index_impl(tbl, key)
-	local v=rawget(tbl, key)
-	if v==nil then
-		local n=rawget(tbl,"__classname")
-		dev.print("dev."..n," nil index ",key)
+-- 関数の実行を記録する
+dev.hook_call = function(li)
+	if li.std then
+		li["Duel"]=Duel
+		li["Card"]=Card
+		li["Group"]=Group
+		li["Effect"]=Effect
 	end
-	return v
-end
-function dev.debug_class_newindex_impl(tbl, key, val)
-	local v=rawget(tbl,key)
-	if v==nil then
-		local n=rawget(tbl,"__classname")
-		dev.print("dev."..n," nil newindex ",key)
+	for name, val in pairs(li) do
+		if type(val)=="table" or type(val)=="userdata" then
+			local mname=dev.typestr(val)
+			if tonumber(name)==nil then mname=name end
+			dev.print(name)
+			for k, v in pairs(val) do
+				if type(v)=="function" then
+					val[k]=dev.call_hook_proc(mname.."."..k, v)
+				end
+			end
+		end
 	end
-	return rawset(tbl, key, val)
 end
 
--- classへの変更（追加・代入）を検知する
-function dev.debug_class_index(...)
-	dev.debug_index = {...}
+-- 
+dev.call_hook_stack = {
+	Push = function(self, name)
+		if self.lock then return false end
+		
+		local tail = self[#self]
+		if tail==nil then
+			table.insert( self, { level=0, indent="", name=name, buf={}, ret={} } )
+		else
+			table.insert( self, { level=tail.level+1, indent=tail.indent.."|", name=name, buf={}, ret={} } )
+		end
+		return true
+	end,
+	ValString = function(self, ...)
+		self[#self].buf = {}
+		self[#self].ret = {...}
+		self.lock = true
+		for i, v in ipairs( self[#self].ret ) do
+			self[#self].buf[i]=dev.valstr(v)
+		end
+		self.lock = false
+		return table.concat(self[#self].buf,", ")
+	end,
+	Params = function(self, ...)
+		return tostring(self[#self].level)..self[#self].indent.." "..self[#self].name.."( "..self:ValString(...).." )"
+	end,
+	Returns = function(self, ...)
+		return tostring(self[#self].level)..self[#self].indent.." -> "..self:ValString(...).." ("..self[#self].name..")"
+	end,
+	Pop = function(self, n)
+		self.temp_ret = dev.table.shallowcopy(self[#self].ret)
+		self[#self] = nil
+		return self.temp_ret
+	end,
+}
+dev.call_hook_proc = function(name, fn)
+	return function( ... )
+		if dev.call_hook_stack:Push(name) then
+			dev.print( dev.call_hook_stack:Params(...) )
+			dev.print( dev.call_hook_stack:Returns(fn(...)) )
+			return table.unpack(dev.call_hook_stack:Pop())
+		else
+			return fn(...)
+		end
+	end
 end
+
+
 

@@ -32,7 +32,7 @@ dev.do_remove = dev.new_class(dev.action,
 		self.removepos = dev.option_field( args, "pos", POS_FACEUP )
 	end,
 	
-	CheckOperable = function( self, est, c ) 
+	CheckOperable = function( self, est, c )
 		if est.timing==dev.oncost then 
 			return c:IsAbleToRemoveAsCost() 
 		else 
@@ -118,11 +118,11 @@ dev.do_sendto_hand = dev.new_class(dev.action,
 			CATEGORY_TOHAND+dev.option_arg(args.addcat, 0), 
 			dev.option_arg(args.hint, HINTMSG_RTOHAND) )
 	
-		self.confirmer = dev.option_arg(args.confirm_player, dev.nilplayer)
-		self.hander = dev.option_arg(args.hand_player, dev.nilplayer)
+		self.confirmer = args.confirm_player
+		self.hander = args.hand_player
 	
-		if self.confirmer==dev.nilplayer then
-			if self.hander~=dev.nilplayer then
+		if self.confirmer==nil then
+			if self.hander~=nil then
 				self.confirmer=self.hander:GetReverse()
 			elseif args.hint==HINTMSG_ATOHAND then
 				self.confirmer=dev.opponent
@@ -139,8 +139,9 @@ dev.do_sendto_hand = dev.new_class(dev.action,
 	end,
 	
 	Execute = function( self, est, g ) 
-		local cnt=Duel.SendtoHand( g, self.hander:GetPlayer(est), est:GetTimingReason() )
-		local cp=self.confirmer:GetPlayer(est)
+		local hp=dev.eval( self.hander, est )
+		local cnt=Duel.SendtoHand( g, hp, est:GetTimingReason() )
+		local cp=dev.eval( self.confirmer, est )
 		if cp then
 			Duel.ConfirmCards( cp, g )
 		end
@@ -178,7 +179,7 @@ dev.do_sendto_extra = dev.new_class(dev.action,
 	end,
 	
 	Execute = function( self, est, g ) 
-		local tp=self.player:GetPlayer( est )
+		local tp=self.player:Eval( est )
 		local cnt=Duel.SendtoExtraP( g, tp, est:GetTimingReason() )
 		return cnt
 	end,
@@ -213,7 +214,7 @@ dev.do_equip = dev.new_class(dev.action,
 	
 	Execute = function( self, est, geq, gtarget )
 		local cnt=0
-		local zp=self.zoneplayer:GetPlayer(est)
+		local zp=dev.eval( self.zoneplayer, est )
 		
 		-- 装備対象
 		local ctg=gtarget:GetFirst()

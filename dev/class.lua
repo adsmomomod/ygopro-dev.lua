@@ -1,13 +1,10 @@
 --
 --
--- クラス
+-- クラスのようななにかを提供
 --
 --
 
--- 
 -- 新しいクラスを作成
---  __init(self,...)が作成後に呼ばれる
--- 
 function dev.new_class(basedefs, defs)
 	local cls
 	
@@ -29,8 +26,6 @@ function dev.new_class(basedefs, defs)
 		dev.table.merge(mt, dev.class_mt)
 		setmetatable(cls, mt)
 		
-		return cls
-	
 	-- 基底クラスあり
 	else
 		cls = dev.table.deepcopy(basedefs)
@@ -39,15 +34,17 @@ function dev.new_class(basedefs, defs)
 		end
 		
 		cls.__is_class = 0
-		cls.__super = basedefs	
-
-		return cls
+		cls.__super = basedefs
 	end
+	return cls
 end
 function dev.register_class( name, cls )
 	rawset(cls, "__classname", name)
 	rawset(cls, "__is_class", 1)
 end
+
+-- 新しいクラスを作成＋登録
+--  :クラスをdevのフィールドにしない場合はこちらを使用すること
 function dev.new_named_class( name, d1, d2 )
 	local cls = dev.new_class( d1, d2 )
 	dev.register_class( name, cls )
@@ -86,6 +83,7 @@ function dev.super_init( self, ... )
 	dev.super_call( self, "__init", ... )
 end
 
+-- クラスかどうか
 function dev.is_class( tbl, name )
 	if type(tbl)=="table" and tbl.__is_class~=nil then
 		if name==nil then
@@ -98,24 +96,16 @@ function dev.is_class( tbl, name )
 	end
 	return false
 end
-function dev.is_same_class(l, r)
-	if dev.is_class(l) then
-		return dev.is_class(r, l.__classname)
-	end
-	return false
-end	
 
 -- インスタンスを作成
-function dev.new( cls, ... )
-	return dev.instantiate( {}, cls, ... )
-end
-
--- 
 function dev.instantiate( baseinst, cls, ... )
 	local inst = baseinst
 	for k, v in pairs(cls) do
 		inst[k] = v
 	end
+	local t=dev.table.deepcopy(getmetatable(cls))
+	t.__call = nil
+	setmetatable( inst, t )
 	
 	inst:__init(...)
 	
@@ -124,18 +114,16 @@ function dev.instantiate( baseinst, cls, ... )
 	end
 	return inst
 end
-
+function dev.new( cls, ... )
+	return dev.instantiate( {}, cls, ... )
+end
 
 -- クラス用メタテーブル
 dev.class_mt = {
-	__call = dev.new
-}
-dev.class_mt_d = {
-	__index = dev.debug_class_index_impl,
-	__newindex = dev.debug_class_newindex_impl
+	__call = dev.new -- ()で構築
 }
 
--- クラスなら勝手に登録
+-- devにメタテーブルを設定：クラスなら勝手に名前を登録
 setmetatable(dev, {
 	__newindex = function( tbl, key, val )
 		if dev.is_class(val) and val.__is_class==0 and tbl[key] == nil then

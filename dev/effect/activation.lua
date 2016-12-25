@@ -9,7 +9,7 @@
 --
 -- op
 --
-local active_op = dev.new_named_class("activation_op", dev.op,
+dev.active_op = dev.new_class(dev.op,
 {
 	__init = function( self, tim, a )
 		dev.super_init( self, a )
@@ -53,7 +53,7 @@ local active_op = dev.new_named_class("activation_op", dev.op,
 --
 -- カード等を対象とする効果
 --
-local active_target_op = dev.new_named_class("activation_target_op", active_op,
+dev.active_target_op = dev.new_class(dev.active_op,
 {
 	__init = function( self, ... )
 		dev.super_init( self, dev.onoperation, ... )
@@ -66,7 +66,7 @@ local active_target_op = dev.new_named_class("activation_target_op", active_op,
 		if self.action.arity>1 then
 			return true
 		end
-		self:pushSelf( est )
+		self:beginOp( est, 1 )
 		return self.operand:Match( est, self:IsTakeTarget(), chkc )
 	end,
 	
@@ -84,15 +84,15 @@ local active_target_op = dev.new_named_class("activation_target_op", active_op,
 	--   tg 省略でSelectを呼び出し
 	--      省略しないなら、対象カードに設定
 	--
-	Target = function( self, est, ocs )
-		self:pushSelf( est )
-		local sels=self:selOperand( est, ocs )
+	Target = function( self, est, oprst )
+		self:beginOp( est, 1, oprst )
+		local sels=self:selOperand( est )
 		if sels==nil or #sels==0 then return nil end
 		
 		local tg = sels[1] -- オペレーション情報登録用に一部
 		self:DebugDisp( est, "target selected=", tg:GetCount() )
 		self:SetOperationInfo( est, tg )
-		return tg
+		return tg, self:exitOp(est)
 	end,
 }) 
 
@@ -135,8 +135,8 @@ dev.activation_eclass = dev.new_class(
 	-- クラス
 	cost_op 	= dev.op,
 	side_op		= dev.op,
-	main_op		= active_op,
-	target_op 	= active_target_op,	
+	main_op		= dev.active_op,
+	target_op 	= dev.active_target_op,	
 	
 	-- 発動に必要なオペレーション
 	MainCostOp = function( self, a )

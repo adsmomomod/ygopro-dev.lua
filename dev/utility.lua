@@ -68,13 +68,31 @@ end
 
 -- デバッグ表示
 function dev.valstr(v)
+	local t=dev.typestr(v)
 	if v==nil then return "nil"
+	elseif t=="Card" then return dev.cardstr(v)
+	elseif t=="Group" then return dev.groupstr(v)
+	elseif t=="Effect" then return "effect"
+	elseif t=="table" then 
+		local disp={}
+		for k, vv in pairs(v) do 
+			local vs=tostring(vv)
+			if dev.typestr(vv)~="table" then vs=dev.valstr(vv) end
+			table.insert(disp,k.."="..vs) 
+		end
+		return "{"..table.concat(disp,", ").."}"
+	elseif t=="function" then
+		local d=debug.getinfo(v,"n")
+		return "[function]"..dev.option_arg(d.name, "")
+	elseif type(v)=="table" and v.__is_class then
+		return "class#"..v.__classname
 	else return tostring(v) end
 end
 function dev.valtypestr(v)
 	if v==nil then return "nil"
 	else return tostring(v).."["..type(v).."]" end
 end
+
 function dev.cardstr(c, bsig)
 	local sig=""
 	if bsig==true then
@@ -83,7 +101,23 @@ function dev.cardstr(c, bsig)
 	if not c then
 		return sig.."nil"
 	end
-	return sig.."code="..tostring(c:GetCode()).." A/D="..tostring(c:GetAttack()).."/"..tostring(c:GetDefense())
+	return sig.."c"..tostring(c:GetCode()).."#L"..tostring(c:GetLevel()).."/"..tostring(c:GetAttack()).."/"..tostring(c:GetDefense())
+end
+	
+function dev.groupstr(gt)
+	local g=gt:Clone()
+	local i = 1
+	local ss = "g"..g:GetCount().."[ "
+	local tc=g:GetFirst()
+	while tc do
+		ss = ss..dev.cardstr(tc)
+		if i<g:GetCount() then
+			ss = ss..", "
+		end
+		i = i + 1
+		tc=g:GetNext()
+	end
+	return ss.." ]"
 end
 
 --
@@ -93,13 +127,25 @@ function dev.set_print_handler(mod, ...)
 end
 
 --
+local print_width = 135
 function dev.print(...)   
 	local n = {...}
 	local ss = ""
 	for i, s in pairs(n) do
 		ss = ss..dev.valstr(s)
 	end
-	dev.print_handler(ss)
+	if ss:len()>print_width then
+		local i,j = 0, print_width
+		local ps=ss:sub(i,j)
+		while ps~="" do
+			dev.print_handler(ps)
+			i = j + 1
+			j = i + print_width
+			ps=ss:sub(i,j)
+		end
+	else
+		dev.print_handler(ss)
+	end
 end
 
 function dev.print_card(...)
@@ -112,7 +158,7 @@ function dev.print_card(...)
 			ss = ss..", "
 		end
 	end
-	Debug.Message(ss)
+	dev.print_handler(ss)
 end
 
 function dev.print_group(g,gname)
@@ -121,18 +167,7 @@ function dev.print_group(g,gname)
 		dev.print(gname.."はnilです")
 		return
 	end
-	local i = 1
-	local ss = gname.."-> "
-	local tc=g:GetFirst()
-	while tc do
-		ss = ss..dev.cardstr(tc)
-		if i<g:GetCount() then
-			ss = ss..", "
-		end
-		i = i + 1
-		tc=g:GetNext()
-	end
-	dev.print(ss)
+	dev.print( gname.." "..dev.groupstr(g) )
 end
 
 function dev.print_val(...)  
@@ -145,7 +180,7 @@ function dev.print_val(...)
 			ss = ss..", "
 		end
 	end
-	Debug.Message(ss)
+	dev.print_handler(ss)
 end
 
 function dev.print_table(tbl,tblname,maxlevel,level)
@@ -176,6 +211,10 @@ function dev.print_table(tbl,tblname,maxlevel,level)
 			table.insert(values, {key=k, value=v})
 		end
 	end
+	if #tables==0 and #values==0 then
+		dev.print_handler(tblname.."は空です")
+		return
+	end
 	
 	if level==0 then Debug.Message("------ BEGIN "..tblname.." ---------") end
 	local alsorter = function(l, r) return l.key < r.key end
@@ -183,24 +222,25 @@ function dev.print_table(tbl,tblname,maxlevel,level)
 	-- 値を名前順に表示
 	table.sort(values, alsorter)
 	for _, v in pairs(values) do
-		Debug.Message(indent..v.key.." = "..dev.valstr(v.value))
+		dev.print_handler(indent..v.key.." = "..dev.valstr(v.value))
 	end
 	
 	-- テーブルを名前順に表示
 	table.sort(tables, alsorter)
 	for _, v in pairs(tables) do
-		Debug.Message(indent..v.key.." = {#"..#v.value.."}")
+		dev.print_handler(indent..v.key.." = {#"..#v.value.."}")
 		dev.print_table(v.value,"",maxlevel,level+1)
 	end	
 	
 	if level==0 then Debug.Message("------ END "..tblname.." -----------") end
 end
 
--- デバッグ表示
-function dev.print_effect( e, ename )
-	ename=dev.option_arg(ename,"")
-	dev.print(" >>> Effect "..ename.." <<< ")
-	
+--
+-- ビット操作
+--
+dev.bit = {}
+dev.bit.bcontain = function(l,r)
+	return bit.band(l,r)==r
 end
 
 --
@@ -209,12 +249,14 @@ end
 --
 --
 dev.table = {}
+
+-- 再帰的にテーブルを複製する
 function dev.table.deepcopy(orig)
     local copy = nil
 	local orig_type = type(orig)
     if orig_type == 'table' then
 		copy = {}
-		for orig_key, orig_value in pairs(orig) do
+		for orig_key, orig_value in next, orig, nil do
 			copy[dev.table.deepcopy(orig_key)] = dev.table.deepcopy(orig_value)
 		end
 		setmetatable(copy, dev.table.deepcopy(getmetatable(orig)))
@@ -223,8 +265,14 @@ function dev.table.deepcopy(orig)
     end
     return copy
 end
-function dev.table.arraycopy(orig)
-	return {table.unpack(orig)}
+
+-- トップレベルの要素のみ複製、後は同じ実体を参照
+function dev.table.shallowcopy(orig)
+	local copy = {}
+	for k, v in pairs(orig) do
+		copy[k] = v
+	end
+    return copy
 end
 function dev.table.split_last( tbl )
 	if #tbl == 0 then return nil end
@@ -308,24 +356,14 @@ function dev.table.count(tbl, pred)
 end
 function dev.table.addmeta(t, amt)
 	local mt = dev.option_arg(getmetatable(t), {})
-	dev.table.merge(mt, amt)
+	for k, v in pairs(amt) do
+		mt[k] = v
+	end
 	setmetatable(t, mt)
 	return t
 end
---[[
-function dev.table.join_str(t, sep)
-	local ss = ""
-	local n = #t
-	for i, s in ipairs(t) do
-		ss = ss..t[i]
-		if i<n then
-			ss = ss..sep
-		end
-	end
-	return ss
-end]] --concatでいい
 
--- {4,5,6} -> {[4]=true,[5]=true,[6]=true}
+-- ({4,5,6}) -> {[4]=true,[5]=true,[6]=true}
 function dev.table.make_value_dict(arr, val)
 	val = dev.option_arg(val, true)
 	local nt={}
@@ -335,15 +373,13 @@ function dev.table.make_value_dict(arr, val)
 	return nt
 end
 
--- 
+-- ({"a","b","c"},{100,200,300}) -> {a=100,b=200,c=300}
 function dev.table.insert_array(t, names, values)
 	for i, key in ipairs(names) do
 		t[key] = values[i]
 	end
 	return t
 end
-
-
 
 --
 --

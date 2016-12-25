@@ -45,7 +45,7 @@ dev.lifepoint = dev.new_class(
 	end,
 	
 	GetAll = function( self, est )
-		local p=self.player:GetPlayer( est )
+		local p=dev.eval(self.player,est)
 		return dev.lp_object( Duel.GetLP(p), p )
 	end,
 	
@@ -53,12 +53,13 @@ dev.lifepoint = dev.new_class(
 		return 0, self:Eval( est )
 	end,
 	
-	Exists = function( self, est, outvalue )
+	Exists = function( self, est )
 		if self.proportion then 
 			return true 
 		end
-		local p=self.player:GetPlayer(est)
-		local v=dev.option_arg( dev.eval( self.value, est ), outvalue )
+		local minval=est:OperandState().min
+		local p=dev.eval( self.player, est )
+		local v=dev.option_arg( dev.eval( self.value, est ), minval )
 		return dev.IsOperable( dev.lp_object(v, p), est )
 	end,
 	
@@ -67,14 +68,15 @@ dev.lifepoint = dev.new_class(
 		if self.proportion then
 			v=math.floor( self:Eval(est) / self.proportion )
 		end
-		local p=self.player:GetPlayer(est)
+		local p=dev.eval( self.player, est )
 		return dev.lp_object( v, p )
 	end,
 	
-	SelectImpl = function( self, est, istarget, tp, selmin, selmax, gsel )
+	SelectImpl = function( self, est )
 		local t={}
-		local v=selmin
-		local vmax=math.min( selmax, self:Eval(est) )
+		local v=est:OperandState().min
+		local vmax=est:OperandState().max
+		vmax=math.min( vmax, self:Eval(est) )
 		while true do
 			if vmax < v then
 				break
@@ -82,15 +84,17 @@ dev.lifepoint = dev.new_class(
 			table.insert(t, v)
 			v=v+dev.eval( self.value, est )
 		end
+		
+		local tp=est:OperandState().select_player
 		local sel=Duel.AnnounceNumber( tp, table.unpack(t) )
 	
-		local p=self.player:GetPlayer(est)
+		local p=dev.eval( self.player, est )
 		return dev.lp_object( sel, p )
 	end,
 
 	--
 	Eval = function( self, est )
-		local p=self.player:GetPlayer( est )
+		local p=dev.eval(self.player,est)
 		return Duel.GetLP(p)
 	end,
 })

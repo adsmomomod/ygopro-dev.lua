@@ -58,7 +58,7 @@ dev.summon_tribute_sel = dev.new_class(dev.sel,
 	
 	Select = function( self, est, istarget )
 		local c=est:GetTarget()
-		local sp=self.select_player:GetPlayer(est)
+		local sp=dev.eval( self.select_player, est )
 		
 		local mg=self:getSel( est, istarget )
 		return Duel.SelectTribute( sp, c, self.selmin, self.selmin, mg, self.opponent )
@@ -153,11 +153,10 @@ dev.summon_proc_eclass = dev.new_class(
 		if est:GetTarget()==nil then	
 			return true
 		end		
-		self:ResetPies( est )
 		if not self:CheckRequiredCondition( est ) then 
 			self:DebugDisp("使用条件が満たされていません", est)
 			return false
-		elseif not self:CheckPies( est ) then 
+		elseif not est:CheckPieCounters() then 
 			self:DebugDisp("Condition Pieが足りません", est)
 			return false 
 		end

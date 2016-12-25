@@ -110,12 +110,8 @@ dev.do_confirm = dev.new_class(dev.action,
 	end,
 	
 	Execute = function( self, est, g )
-		Duel.ConfirmCards( self.player:GetPlayer(est), g )
+		Duel.ConfirmCards( dev.eval( self.player, est ), g )
 		return g:GetCount()
-	end,
-	
-	PostExecute = function( self, est )
-		Duel.ShuffleHand( self.player:GetReverse():GetPlayer(est) )
 	end,
 })
 

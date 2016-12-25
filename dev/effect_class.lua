@@ -1,195 +1,7 @@
-
 --
--- ====================================================
+-- Effectの各要素に対応するアクセサを作ってやる
 --
--- !! 効果
---
--- ====================================================
---
--- 引数をパック
---
-dev.effect_state = dev.new_class(
-{
-	__init = function( self, ec, tim ) 
-		self.eclass = ec
-		self.timing = tim
-		
-		self.curop = 0
-		self.opst = {}
-		self.pies = {}
-		
-		self.tg = {}
-		self.args = {}
-	end,
-	GetEffect = function(self)
-		return self.effect
-	end,
-	GetHandler = function(self)
-		return self:GetEffect():GetHandler()
-	end,
-	GetLabelObject = function(self)
-		return self:GetEffect():GetLabelObject()
-	end,
-	SetLabelObject = function(self, v)
-		return self:GetEffect():SetLabelObject(v)
-	end,
-	
-	GetTarget = function( self )
-		return self.tc
-	end,
-	GetTargetPlayer = function( self )
-		return self.tp
-	end,
-	
-	GetTimingReason = function(self)
-		return self.eclass:GetOperationReason( self )
-	end,
-	
-	GetEffectClass = function(self)
-		return self.eclass
-	end,
-	
-	--
-	-- 現在のオペレーションをスタックにつむ
-	-- _はライブラリ内でのみ使用
-	--
-	pushOpState = function( self, key, state )
-		self.curop=key
-		if self.opst[key]==nil then
-			self.opst[key]=state
-		end
-		return self.opst[key]
-	end,
-	
-	HasOpState = function(self)
-		return self:TopOpState()~=nil
-	end,
-	TopOpState = function(self)
-		return self.opst[self.curop]
-	end,
-	TopOp = function(self)
-		return self.opst[self.curop].op
-	end,
-	
-	GetOpCheck = function( self, op )
-		return self.opst[op.key].check
-	end,
-	GetOpResult = function( self, op )
-		return self.opst[op.key].result
-	end,
-	GetOpResultOperand = function( self, op, opr )
-		local r=self:GetOpResult(op)
-		if r then return r:GetOperand(opr) end
-		return nil
-	end,
-	
-	InvokeOp = function( self, op, fn )
-		local cop=self.curop
-		if op then
-			self.curop=op.key
-		else
-			self.curop=nil
-		end		
-		local cag=dev.table.deepcopy(self.args)
-		
-		local r=fn( op, self )
-		
-		self.curop=cop
-		self.args=cag
-		return r
-	end,
-	
-	--
-	-- パイ
-	--
-	GetPieCounter = function(self, key)
-		local pi = self.pies[key]
-		if pi==nil then
-			self:OpDebugDisp("key=",key,"のパイカウンターが作成されていません")
-		end
-		return pi
-	end,	
-	addPieCounter = function(self, pie)
-		local ni = dev.pie_counter(pie)
-		ni:Reset( self )
-		self.pies[pie.key] = ni 
-	end,
-	
-	--
-	-- 対象
-	-- 
-	GetActivationTarget = function(self, idx)
-		return self.tg[idx]
-	end,
-	setActivationTarget = function(self, tgs)
-		self.tg=tgs
-	end,
-	
-	--
-	--
-	--
-	IsOperable = function( self, ... )
-		local opst=self:TopOpState()
-		if opst then
-			return opst.op:chkOperableObject( self, ... )
-		end
-		return true
-	end,
-	
-	IsOperableSep = function( self, o )
-		local opst=self:TopOpState()
-		if opst then
-			return opst.op:chkOperableObjectSep( self, o, opst.operand )
-		end
-		return true
-	end,
-	
-
-	-- デバッグ関数
-	OpDebugDisp = function(self, ...)
-		if self:HasOpState() then
-			self:TopOp():DebugDisp(self, ...)
-		end
-	end
-})
-function dev.IsHandlerCard( c, est )
-	return c==est:GetHandler()
-end
-function dev.IsOperable( est, ... )
-	return est:IsOperable(...)
-end 
-
--- 
-dev.operation_state = dev.new_class(
-{
-	__init = function(self, op, args, pie)
-		self.op = op
-		self.operand = 1
-		self.args = args
-		self.check = false
-		self.result = nil
-	end,
-	
-	setCurOperand = function( self, opr )
-		self.operand = opr
-	end,
-	setArgument = function( self, args )
-		self.args = args
-	end,
-	setResult = function( self, r )
-		self.result = r
-	end,
-	setCheckResult = function( self, r )
-		self.check = r
-	end,
-})
-
---
---
--- 効果クラス
---
---
-dev.eclass_prop = dev.new_class(
+local eclass_prop = dev.new_named_class("effect_class_property",
 {
 	__init = function( self, name, constpfx, arith, setter )
 		self.name = name
@@ -293,7 +105,8 @@ dev.eclass_prop = dev.new_class(
 		return s, ret
 	end,
 })
-dev.eclass_ctl_handler_prop = dev.new_class(dev.eclass_prop,
+
+local eclass_handler_prop = dev.new_named_class("effect_class_handler_property", eclass_prop,
 {
 	__init = function( self, name )
 		dev.super_init( self, name )
@@ -313,7 +126,7 @@ dev.eclass_ctl_handler_prop = dev.new_class(dev.eclass_prop,
 -- effect_classのプロパティリスト
 local eclass_prop_list = 
 {
-	dev.eclass_prop( "Code", function(s) 
+	eclass_prop( "Code", function(s) 
 		if string.match(s,"^EVENT_") then 
 			return true
 		elseif string.match(s,"^EFFECT_") then
@@ -321,31 +134,31 @@ local eclass_prop_list =
 		end
 		return false
 	end ),
-	dev.eclass_prop( "Type", "^EFFECT_TYPE_", true ),
-	dev.eclass_prop( "Category", "^CATEGORY_", true ),
-	dev.eclass_prop( "Property", "^EFFECT_FLAG_", true ),
-	dev.eclass_prop( "Range", function(s)
+	eclass_prop( "Type", "^EFFECT_TYPE_", true ),
+	eclass_prop( "Category", "^CATEGORY_", true ),
+	eclass_prop( "Property", "^EFFECT_FLAG_", true ),
+	eclass_prop( "Range", function(s)
 		return string.match(s,"^LOCATION_") and not string.match(s,"^LOCATION_REASON")
 	end, true ),
-	dev.eclass_prop( "CountLimit", "^EFFECT_COUNT_CODE_" ),
-	dev.eclass_prop( "AbsoluteRange" ),
-	dev.eclass_prop( "HintTiming", "^TIMING_", true ),
-	dev.eclass_prop( "Label" ),
-	dev.eclass_prop( "LabelObject" ),
-	dev.eclass_prop( "Reset", "^RESET_", true ),
-	dev.eclass_prop( "TargetRange" ),
-	dev.eclass_prop( "OwnerPlayer" ),
-	dev.eclass_prop( "Description", nil, false, 
+	eclass_prop( "CountLimit", "^EFFECT_COUNT_CODE_" ),
+	eclass_prop( "AbsoluteRange" ),
+	eclass_prop( "HintTiming", "^TIMING_", true ),
+	eclass_prop( "Label" ),
+	eclass_prop( "LabelObject" ),
+	eclass_prop( "Reset", "^RESET_", true ),
+	eclass_prop( "TargetRange" ),
+	eclass_prop( "OwnerPlayer" ),
+	eclass_prop( "Description", nil, false, 
 		function(e, cid, id) 
 			local sid=cid
 			if id~=nil then sid = aux.Stringid(cid,id) end
 			e:SetDescription(sid)
 		end ),
-	dev.eclass_ctl_handler_prop( "Condition" ),
-	dev.eclass_ctl_handler_prop( "Cost" ),
-	dev.eclass_ctl_handler_prop( "Target" ),
-	dev.eclass_ctl_handler_prop( "Operation" ),
-	dev.eclass_ctl_handler_prop( "Value" ),
+	eclass_handler_prop( "Condition" ),
+	eclass_handler_prop( "Cost" ),
+	eclass_handler_prop( "Target" ),
+	eclass_handler_prop( "Operation" ),
+	eclass_handler_prop( "Value" ),
 }
 
 --
@@ -378,7 +191,7 @@ dev.effect_class = dev.new_class(
 		
 		-- カード情報を記録
 		self.Card = cdata -- id, type
-		if self.Card then
+		if self.Card and self.Card.type then
 			if bit.btest( self.Card.type, TYPE_MONSTER ) then
 				self:SetRange(LOCATION_MZONE)
 			else
@@ -451,6 +264,7 @@ dev.effect_class = dev.new_class(
 	
 	-- 発動可能かチェック
 	CheckRequiredCondition = function( self, est )
+		est:ResetPieCounters()
 		for i, entry in ipairs(self._req) do
 			local check_tim=entry[1]
 			local op=entry[2]
@@ -491,23 +305,9 @@ dev.effect_class = dev.new_class(
 		pie.key = #self._pies + 500
 		return pie
 	end,
-	
-	ResetPies = function( self, est, key )
-		for i, pie in ipairs( self._pies ) do
-			if key==nil or key==pie.key then
-				est:addPieCounter( pie )
-			end
-		end		
+	GetPies = function( self )
+		return self._pies
 	end,
-	
-	CheckPies = function( self, est, key )
-		for k, pieinst in pairs( est.pies ) do
-			if key==nil or k==(key.."") then
-				if not pieinst:Check() then return false end
-			end
-		end
-		return true
-	end,	
 	
 	--
 	-- ハンドラ
@@ -542,11 +342,10 @@ dev.effect_class = dev.new_class(
 	ConditionHandler = function( self, est )
 		self:DebugDisp("SetCondition Func Called (do)", est)
 		
-		self:ResetPies( est )
 		if not self:CheckRequiredCondition( est ) then 
 			self:DebugDisp("使用条件が満たされていません", est)
 			return false
-		elseif not self:CheckPies( est ) then 
+		elseif not est:CheckPieCounters() then 
 			self:DebugDisp("Condition Pieが足りません", est)
 			return false 
 		end
@@ -556,7 +355,6 @@ dev.effect_class = dev.new_class(
 	
 	-- cost
 	CostHandler = function( self, est )
-		self:ResetPies( est )
 		if est.chk then	
 			self:DebugDisp("SetCost Func Called (chk)", est)
 			if not self:CheckRequiredCondition( est ) then 
@@ -565,19 +363,20 @@ dev.effect_class = dev.new_class(
 			elseif self.CheckCost and not self.CheckCost(est) then 
 				self:DebugDisp("CheckCostがfalseを返しました", est)
 				return false 
-			elseif not self:CheckPies( est ) then 
+			elseif not est:CheckPieCounters() then 
 				self:DebugDisp("Cost Pieが足りません", est)
 				return false 
 			end
 			return true
 		end
+		
+		est:ResetPieCounters()
 		self:DebugDisp("SetCost Func Called (do)", est)
 		return self.Cost(est)
 	end,
 	
 	-- target
-	TargetHandler = function( self, est )	
-		self:ResetPies( est )	
+	TargetHandler = function( self, est )
 		if est.chkc then
 			self:DebugDisp("SetTarget Func Called (chkc)", est)
 			if not self:CheckRequiredCondition( est ) then return false end
@@ -591,13 +390,14 @@ dev.effect_class = dev.new_class(
 			elseif self.CheckTarget and not self.CheckTarget(est) then
 				self:DebugDisp("CheckTargetがfalseを返しました", est)
 				return false
-			elseif not self:CheckPies( est ) then 
+			elseif not est:CheckPieCounters() then 
 				self:DebugDisp("Target Pieが足りません", est)
 				return false 
 			end
 			return true
 		end
 		
+		est:ResetPieCounters()
 		self:DebugDisp("SetTarget Func Called (do)", est)
 		return self.Target(est)
 	end,
@@ -612,16 +412,15 @@ dev.effect_class = dev.new_class(
 			--dev.print_table(tgs,"tgs")
 		end
 		
-		self:ResetPies( est )
 		if not self:CheckRequiredCondition( est ) then 
 			self:DebugDisp("効果適用条件が満たされていません", est)
 			return nil 
-		elseif not self:CheckPies( est ) then 
+		elseif not est:CheckPieCounters() then 
 			self:DebugDisp("Operation Pieが足りません", est)
 			return nil
 		end
 		
-		self:ResetPies( est )
+		est:ResetPieCounters()
 		return self.Operation( est )
 	end,
 	
@@ -655,7 +454,7 @@ function dev.BuildEffectClass( initer, cdata )
 	local inst = dev.effect_class(cdata)
 	initer( inst )
 	
-	-- プロパティを抽出し設定
+	-- プロパティを抽出しビルド
 	for _, prop in ipairs( eclass_prop_list ) do
 		if prop.Build~=nil then
 			prop:Build( inst )
@@ -688,7 +487,7 @@ function dev.CreateEffect( eclass, c )
 	return e
 end
 
--- デバッグ表示
+-- EffectClassのデバッグ表示
 function dev.print_effect_class( e, ename )
 	ename=dev.option_arg(ename,"e")
 	dev.print(" >>> Effect "..ename.." <<< ")

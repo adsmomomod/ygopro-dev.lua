@@ -4,7 +4,7 @@
 --
 dev.you_p = dev.new_class(
 {
-	GetPlayer = function(self, est)
+	Eval = function(self, est)
 		return est:GetTargetPlayer()
 	end,
 	GetReverse = function(self)
@@ -13,7 +13,7 @@ dev.you_p = dev.new_class(
 })
 dev.opponent_p = dev.new_class(
 {
-	GetPlayer = function(self, est)
+	Eval = function(self, est)
 		return 1-est:GetTargetPlayer()
 	end,
 	GetReverse = function(self)
@@ -22,33 +22,16 @@ dev.opponent_p = dev.new_class(
 })
 dev.both_p = dev.new_class(
 {
-	GetPlayer = function(self)
+	Eval = function(self)
 		return PLAYER_ALL
 	end,
 	GetReverse = function(self)
 		return dev.nilplayer -- none?
 	end,
 })
-dev.nil_p = dev.new_class(
-{
-	GetPlayer = function(self)
-		return nil
-	end,
-	GetReverse = function(self)
-		return nil
-	end,
-})
-dev.combined_p = dev.new_class(
-{
-	__init = function( self, l, r )
-		self.l = l
-		self.r = r
-	end,
-})
 dev.you 		= dev.you_p()
 dev.opponent 	= dev.opponent_p()
 dev.both 		= dev.both_p()
-dev.nilplayer	= dev.nil_p()
 
 --
 -- プレイヤーID, 場所1, 場所2　の情報
@@ -75,7 +58,7 @@ dev.location_info = dev.new_class(
 		return l
 	end,
 	
-	-- ( p, 0, l ) を ( 1-p, l, 0 ) の形式に直す
+	-- ( p, 0, l ) を ( 1-p, l ) の形式に直す
 	GetHead = function( self )
 		if self[1]==0 and self[2]~=0 then
 			return 1-self.player, self[2]
@@ -94,10 +77,15 @@ dev.location_info = dev.new_class(
 		end
 		return dev.location_info( np, l1, l2 )
 	end,
+	
+	Contains = function( self, c )
+		local p, l = self:GetHead()
+		return c:IsLocation(l)
+	end,
 })
 
 --
--- cards プリセット
+-- 相対的な場所を表現
 --
 dev.relative_location = dev.new_class(
 {
@@ -110,7 +98,7 @@ dev.relative_location = dev.new_class(
 	
 	Eval = function( self, est )
 		local l 
-		local p = self.player:GetPlayer( est )
+		local p = dev.eval(self.player,est)
 		if p == PLAYER_ALL then
 			l = dev.location_info( 0, self.loc1, self.loc1 )
 		else
@@ -126,14 +114,20 @@ dev.relative_location = dev.new_class(
 		return l
 	end,
 })
-dev.mzone		= function(p) return dev.relative_location(p, LOCATION_MZONE) end
-dev.szone		= function(p) return dev.relative_location(p, LOCATION_SZONE) end
-dev.grave		= function(p) return dev.relative_location(p, LOCATION_GRAVE) end
-dev.removed		= function(p) return dev.relative_location(p, LOCATION_REMOVED) end
-dev.hand		= function(p) return dev.relative_location(p, LOCATION_HAND) end
-dev.deck		= function(p) return dev.relative_location(p, LOCATION_DECK) end
-dev.extradeck	= function(p) return dev.relative_location(p, LOCATION_EXTRA) end
-dev.overlay		= function(p) return dev.relative_location(p, LOCATION_OVERLAY) end
-dev.onfield		= function(p) return dev.relative_location(p, LOCATION_ONFIELD) end
 
+local zone_binder = function(zonecode)
+	return function(p)
+		return dev.relative_location(p, zonecode)
+	end
+end
+dev.mzone		= zone_binder(LOCATION_MZONE)
+dev.szone		= zone_binder(LOCATION_SZONE)
+dev.grave		= zone_binder(LOCATION_GRAVE)
+dev.removed		= zone_binder(LOCATION_REMOVED)
+dev.hand		= zone_binder(LOCATION_HAND)
+dev.deck		= zone_binder(LOCATION_DECK)
+dev.extradeck	= zone_binder(LOCATION_EXTRA)
+dev.overlay		= zone_binder(LOCATION_OVERLAY)
+dev.onfield		= zone_binder(LOCATION_ONFIELD)
+dev.alllocation	= zone_binder(0xFF)
 

@@ -1,12 +1,12 @@
 --
 -- =====================================================================
 --
---  !! Pie 場所の空きをチェック
+--  Pie 場所の空きをチェック
 --
 -- =====================================================================
 --
 --
--- シミュレートのたびに生成される
+-- 秋場所の数を記録 - ハンドラが呼び出されるたびに生成される
 --
 dev.pie_counter = dev.new_class(
 {
@@ -28,7 +28,7 @@ dev.pie_counter = dev.new_class(
 })
 
 --
--- 食べたり戻したりする側
+-- パイカウンターを操作する側 - 消費/回復
 --
 dev.pie_consumer = dev.new_class(
 {
@@ -48,7 +48,6 @@ dev.pie_consumer = dev.new_class(
 		return c:Get()
 	end,
 })
-
 dev.pie_releaser = dev.new_class(dev.pie_consumer
 {
 	__init = function( self, piekey )
@@ -62,7 +61,6 @@ dev.pie_releaser = dev.new_class(dev.pie_consumer
 --
 -- パイの原型
 --
-
 -- 固定数のパイ
 dev.basic_pie = dev.new_class(
 {
@@ -77,7 +75,7 @@ dev.basic_pie = dev.new_class(
 	Releaser = function( self ) return dev.pie_releaser( self.key ) end,
 })
 
--- モンスターゾーン / 魔法罠ゾーン
+-- モンスターゾーン / 魔法罠ゾーンの空き
 dev.zone_pie = dev.new_class(dev.basic_pie, 
 {
 	__init = function( self, loc )

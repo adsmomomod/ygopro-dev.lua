@@ -1,12 +1,10 @@
-
------------------------------------------------------
+--
+--==========================================================
 --
 -- スクリプト初期化コード
 --
------------------------------------------------------
---
---
---
+--==========================================================
+-- 
 dev.card_init_class = dev.new_class(
 {
 	__init = function( self, func, cdata )
@@ -24,7 +22,7 @@ dev.CardInitClass = function( f, cd )
 end
 
 -- 
--- セクションとして記録し最後に実行する
+-- スクリプトごとのモジュールオブジェクトを作成
 --
 dev.script_module = dev.new_class(
 {
@@ -52,8 +50,10 @@ dev.script_module = dev.new_class(
 		end
 	},
 })
-	
--- 効果作成のひな形を形成する
+
+--
+-- カードスクリプト
+--
 dev.BuildScript = function( script )
 	local fn, class
 	for _, entry in ipairs( script.__idx ) do
@@ -67,27 +67,23 @@ dev.BuildScript = function( script )
 		end
 		table.insert( script.__init, class )
 	end
+	-- initial_effectを提供
+	return function( c ) 
+		dev.InitCard( script, c )
+	end
 end
-	
--- コード片を順番に実行する
+
+-- 構築されたスクリプトをカードに対して実行する
 dev.InitCard = function( script, c )
 	for _, initer in ipairs( script.__init ) do 
 		initer:RegisterToCard(c)
 	end
 end
 
---
-dev.AutoInitialEffect = function( script )
-	return function(c) 
-		dev.InitCard( script, c )
-	end
-end
-
 -- 
--- モジュール
+-- スクリプトモジュール
 --
---
-dev.BuildModuleScript = function( mod )
+dev.BuildScriptModule = function( mod )
 	if dev.is_class( mod, dev.script_module ) then
 		dev.BuildScript( mod )
 	end

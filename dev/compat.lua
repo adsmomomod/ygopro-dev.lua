@@ -1,8 +1,9 @@
 --
--- ygopro基準 - ADS 互換性対応
+-- ygopro <-> ADS 互換性対応
+-- 基本ygopro基準
 --
 
--- ygoproにはあるがADSにはない定数を、ADSで使用する場合のために作成
+-- ygoproとADSで名前の違う定数に対応：ADSにygoproの名前の定数を追加する
 local function gdef_ads_compat( name, adsname )
 	if _G[name] == nil then
 		_G[name] = _G[adsname]
