@@ -124,7 +124,10 @@ function dev.enable_require()
 end
 dev.require = function(...) return true end -- 普段はここに転送、なにもしない
 
+
+--
 -- 関数の実行を記録する
+--
 dev.hook_call = function(li)
 	if li.std then
 		li["Duel"]=Duel
@@ -146,47 +149,49 @@ dev.hook_call = function(li)
 	end
 end
 
--- 
-dev.call_hook_stack = {
+local call_hook_stack = {
 	Push = function(self, name)
 		if self.lock then return false end
 		
 		local tail = self[#self]
 		if tail==nil then
-			table.insert( self, { level=0, indent="", name=name, buf={}, ret={} } )
+			table.insert( self, { level=0, indent="", name=name, ret={} } )
 		else
-			table.insert( self, { level=tail.level+1, indent=tail.indent.."|", name=name, buf={}, ret={} } )
+			table.insert( self, { level=tail.level+1, indent=tail.indent.."|", name=name, ret={} } )
 		end
 		return true
 	end,
 	ValString = function(self, ...)
-		self[#self].buf = {}
-		self[#self].ret = {...}
+		local buf = table.pack(...)
 		self.lock = true
-		for i, v in ipairs( self[#self].ret ) do
-			self[#self].buf[i]=dev.valstr(v)
+		for i=1, buf.n do 
+			buf[i]=dev.valstr(buf[i])
 		end
 		self.lock = false
-		return table.concat(self[#self].buf,", ")
+		return table.concat(buf,", ")
 	end,
 	Params = function(self, ...)
-		return tostring(self[#self].level)..self[#self].indent.." "..self[#self].name.."( "..self:ValString(...).." )"
+		local cur=self[#self]
+		return tostring(cur.level)..cur.indent.." "..cur.name.."( "..self:ValString(...).." )"
 	end,
 	Returns = function(self, ...)
-		return tostring(self[#self].level)..self[#self].indent.." -> "..self:ValString(...).." ("..self[#self].name..")"
+		local cur=self[#self]
+		cur.ret = table.pack(...)
+		return tostring(cur.level)..cur.indent.." "..cur.name.." -> "..self:ValString(...)
 	end,
 	Pop = function(self, n)
-		self.temp_ret = dev.table.shallowcopy(self[#self].ret)
+		local temp_ret = dev.table.shallowcopy(self[#self].ret)
 		self[#self] = nil
-		return self.temp_ret
+		return temp_ret
 	end,
 }
+
 dev.call_hook_proc = function(name, fn)
 	return function( ... )
-		if dev.call_hook_stack:Push(name) then
-			dev.print( dev.call_hook_stack:Params(...) )
-			dev.print( dev.call_hook_stack:Returns(fn(...)) )
-			return table.unpack(dev.call_hook_stack:Pop())
+		if call_hook_stack:Push(name) then
+			dev.print( call_hook_stack:Params(...) )
+			dev.print( call_hook_stack:Returns(fn(...)) )
+			return table.unpack( call_hook_stack:Pop() )
 		else
 			return fn(...)
 		end

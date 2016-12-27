@@ -146,7 +146,6 @@ dev.op = dev.new_class(
 	selOperand = function( self, est )
 		local opc=dev.operand_container()
 		if self.operand~=nil then
-			--dev.hook_line_locals(2)
 			local ret=self.operand:Select( est )
 			debug.sethook()
 			if ret==nil then 
@@ -393,5 +392,6 @@ dev.action = dev.new_class(
 			return true
 		end
 	end,
+	
 })
 

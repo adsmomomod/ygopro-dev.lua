@@ -6,6 +6,15 @@
 -- =====================================================================
 --
 
+self:MainOp{
+	dev.do_remove(),
+	dev.sel{},
+	category = { 
+		CATEGORY_LEAVE_GRAVE = 1
+		CATEGORY_ = 1
+	}
+}
+
 --
 -- op
 --
@@ -18,12 +27,12 @@ dev.active_op = dev.new_class(dev.op,
 	end,
 	
 	-- OpInfo
-	SetOperationInfo = function( self, est, tg )
+	SetOperationInfo = function( self, est, oprs )		
 		local val, otp = 0, 0
 		if self.action.OperationInfoParams~=nil then
 			val, otp = self.action:OperationInfoParams( est )
 		end
-		if tg~=nil then
+		if oprs~=nil then
 			local tgc=tg:GetCount()
 			Duel.SetOperationInfo( 0, self.category, tg, tg:GetCount(), otp, val )
 		else
@@ -87,12 +96,11 @@ dev.active_target_op = dev.new_class(dev.active_op,
 	Target = function( self, est, oprst )
 		self:beginOp( est, 1, oprst )
 		local sels=self:selOperand( est )
-		if sels==nil or #sels==0 then return nil end
+		if sels:Empty() then return end
 		
-		local tg = sels[1] -- オペレーション情報登録用に一部
-		self:DebugDisp( est, "target selected=", tg:GetCount() )
-		self:SetOperationInfo( est, tg )
-		return tg, self:exitOp(est)
+		self:SetOperationInfo( est, sels:GetTable() )
+		self:DebugDisp( est, "target selected=", sels:GetCount() )
+		return self:exitOp(est)
 	end,
 }) 
 

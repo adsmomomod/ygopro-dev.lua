@@ -405,6 +405,12 @@ dev.operand_container = dev.new_class(
 	GetTable = function( self )
 		return self.opr
 	end,
+	OperandAt = function( self, i )
+		return self.opr[i]
+	end,
+	Empty = function( self )
+		return #self.opr==0 
+	end,
 })
 
 --

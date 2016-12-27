@@ -17,7 +17,7 @@ dev.do_destroy = dev.new_class(dev.action,
 	end,
 	Execute = function( self, est, g )
 		return Duel.Destroy(g, est:GetTimingReason(), self.dest) 
-	end
+	end,
 })
 
 -- 除外
