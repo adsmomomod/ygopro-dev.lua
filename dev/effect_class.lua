@@ -239,7 +239,9 @@ dev.effect_class = dev.new_class(
 		self:enableAutoGen( timing )
 		
 		-- キー発行
-		op.key = #self._ops + 100
+		if dev.is_class(op) then
+			op.key = #self._ops + 100
+		end
 		return op
 	end,
 		
@@ -247,10 +249,13 @@ dev.effect_class = dev.new_class(
 	ProcessOps = function( self, est )
 		for i, ent in ipairs(self._ops) do
 			local exec_tim = ent[1]
-			
 			if bit.btest( exec_tim, est.timing ) then
 				local op = ent[2]
-				op:Execute( est )
+				if type(op)=="table" and op.Execute then
+					op:Execute( est )
+				else
+					dev.eval( op, est )
+				end
 			end
 		end
 	end,

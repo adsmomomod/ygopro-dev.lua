@@ -9,7 +9,7 @@
 dev.do_destroy = dev.new_class(dev.action,
 {
 	__init = function(self, args)
-		dev.super_init(self, CATEGORY_DESTROY, HINTMSG_DESTROY)
+		dev.super_init( self, CATEGORY_DESTROY, HINTMSG_DESTROY )
 		self.dest = dev.option_field( args, "dest", nil )
 	end,
 	CheckOperable = function( self, est, c ) 
@@ -79,19 +79,14 @@ dev.do_sendto_deck = dev.new_class(dev.action,
 	end
 })
 
--- 墓地に送る/捨てる
+-- 墓地に送る
 dev.do_sendto_grave = dev.new_class(dev.action,
 {
-	__init = function( self, args )		
-		self.discard = dev.option_field( args, "discard", false )
-		dev.super_init( self, CATEGORY_TOGRAVE, 
-			dev.option_val(self.discard, HINTMSG_DISCARD, HINTMSG_TOGRAVE) )
+	__init = function( self, args )
+		dev.super_init( self, CATEGORY_TOGRAVE, HINTMSG_TOGRAVE )
 	end,
 	
 	CheckOperable = function( self, est, c )
-		if self.discard==true and not c:IsDiscardable() then
-			return false
-		end
 		if est.timing==dev.oncost then 
 			return c:IsAbleToGraveAsCost() 
 		else 
@@ -101,22 +96,35 @@ dev.do_sendto_grave = dev.new_class(dev.action,
 	
 	Execute = function( self, est, g )
 		local r=est:GetTimingReason()
-		if self.discard==true then
-			r=bit.bor(r, REASON_DISCARD)
-		end	
+		if self.discard then r=bit.bor(r, REASON_DISCARD) end	
 		return Duel.SendtoGrave(g, r)
 	end,
 })
 
--- 手札に戻す
-dev.do_sendto_hand = dev.new_class(dev.action,
+-- 手札から捨てる
+dev.do_discard = dev.new_class(dev.do_sendto_grave,
 {
 	__init = function( self, args )
+		dev.super_init( self, CATEGORY_HANDES, HINTMSG_DISCARD )
+	end,
+	
+	CheckOperable = function( self, est, c )
+		return c:IsDiscardable()
+	end,	
+	Execute = function( self, est, g )
+		return Duel.SendtoGrave( g, bit.bor(est:GetTimingReason(), REASON_DISCARD) )
+	end,
+})
+
+-- フィールドから手札に加える=手札に戻す
+dev.do_sendto_hand = dev.new_class(dev.action,
+{
+	__init = function( self, args, cat, hint )
 		if args==nil then args={} end
 		
 		dev.super_init( self, 
-			CATEGORY_TOHAND+dev.option_arg(args.addcat, 0), 
-			dev.option_arg(args.hint, HINTMSG_RTOHAND) )
+			dev.option_arg(cat, CATEGORY_TOHAND), 
+			dev.option_arg(hint, HINTMSG_RTOHAND) )
 	
 		self.confirmer = args.confirm_player
 		self.hander = args.hand_player
@@ -149,20 +157,18 @@ dev.do_sendto_hand = dev.new_class(dev.action,
 	end,
 })
 
--- フィールドとデッキ以外から手札に加える
-function dev.do_salvage(args)
-	if args==nil then args={} end
-	args.hint = HINTMSG_ATOHAND
-	return dev.do_sendto_hand( args )
-end
-
 -- デッキから手札に加える
 function dev.do_search(args)
-	if args==nil then args={} end
-	args.hint = HINTMSG_ATOHAND
-	args.addcat = CATEGORY_SEARCH
-	return dev.do_sendto_hand( args )
+	local a=dev.do_sendto_hand( args, CATEGORY_TOHAND+CATEGORY_SEARCH, HINTMSG_ATOHAND )
+	a.act_category=CATEGORY_TOHAND
+	return a
 end
+
+-- フィールドとデッキ以外から手札に加える
+function dev.do_salvage(args)
+	return dev.do_sendto_hand( args, CATEGORY_TOHAND, HINTMSG_ATOHAND )
+end
+
 
 -- エクストラデッキに送る
 dev.do_sendto_extra = dev.new_class(dev.action,
@@ -189,7 +195,8 @@ dev.do_sendto_extra = dev.new_class(dev.action,
 dev.do_tribute = dev.new_class(dev.action,
 {
 	__init = function( self )
-		dev.super_init( self )
+		dev.super_init( self, CATEGORY_RELEASE )
+		self.act_category = nil
 	end,
 	CheckOperable = function( self, est, c ) 
 		return c:IsReleasable() and ( est.timing == dev.oncost or c:IsReleasableByEffect() )

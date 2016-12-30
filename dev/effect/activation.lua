@@ -6,66 +6,15 @@
 -- =====================================================================
 --
 
-self:MainOp{
-	dev.do_remove(),
-	dev.sel{},
-	category = { 
-		CATEGORY_LEAVE_GRAVE = 1
-		CATEGORY_ = 1
-	}
-}
-
 --
 -- op
 --
-dev.active_op = dev.new_class(dev.op,
-{
-	__init = function( self, tim, a )
-		dev.super_init( self, a )
-		dev.require( tim, "number" )
-		self.exectim = tim
-	end,
-	
-	-- OpInfo
-	SetOperationInfo = function( self, est, oprs )		
-		local val, otp = 0, 0
-		if self.action.OperationInfoParams~=nil then
-			val, otp = self.action:OperationInfoParams( est )
-		end
-		if oprs~=nil then
-			local tgc=tg:GetCount()
-			Duel.SetOperationInfo( 0, self.category, tg, tg:GetCount(), otp, val )
-		else
-			local onum=self:GetObjectMinMax( est, 1 ) -- 第一オブジェクトのみ
-			Duel.SetOperationInfo( 0, self.category, nil, onum, otp, val )
-		end
-	end,
-	
-	-- インターフェース関数
-	Execute = function( self, est, ocs )
-		local r
-		if est.timing == dev.ontarget then
-			r=self:Target( est, ocs )
-		end
-		if est.timing == self.exectim then
-			r=self:ExecuteAction( est, ocs )
-		end
-		return r
-	end,
-	
-	Target = function( self, est, tg )
-		self:SetOperationInfo( est, tg )
-		return tg
-	end,
-}) 
 
---
 -- カード等を対象とする効果
---
-dev.active_target_op = dev.new_class(dev.active_op,
+dev.active_target_op = dev.new_class(dev.op,
 {
-	__init = function( self, ... )
-		dev.super_init( self, dev.onoperation, ... )
+	__init = function( self, a )
+		dev.super_init( self, a )
 		self:AddFlag( dev.astarget )
 	end,
 	
@@ -89,17 +38,25 @@ dev.active_target_op = dev.new_class(dev.active_op,
 		end
 	end,
 	
+	Execute = function( self, est, ocs )
+		local r
+		if est.timing == dev.ontarget then
+			r=self:Target( est, ocs )
+		end
+		if est.timing == dev.onoperation then
+			r=self:ExecuteAction( est, ocs )
+		end
+		return r
+	end,
+	
 	-- Target
 	--   tg 省略でSelectを呼び出し
 	--      省略しないなら、対象カードに設定
 	--
 	Target = function( self, est, oprst )
-		self:beginOp( est, 1, oprst )
-		local sels=self:selOperand( est )
+		local opst=self:beginOp( est, 1, oprst )
+		local sels=self:selOperand( est, opst )
 		if sels:Empty() then return end
-		
-		self:SetOperationInfo( est, sels:GetTable() )
-		self:DebugDisp( est, "target selected=", sels:GetCount() )
 		return self:exitOp(est)
 	end,
 }) 
@@ -143,7 +100,7 @@ dev.activation_eclass = dev.new_class(
 	-- クラス
 	cost_op 	= dev.op,
 	side_op		= dev.op,
-	main_op		= dev.active_op,
+	main_op		= dev.op,
 	target_op 	= dev.active_target_op,	
 	
 	-- 発動に必要なオペレーション
@@ -152,21 +109,32 @@ dev.activation_eclass = dev.new_class(
 		self:AddRequired( op, dev.oncost )
 		return self:AddOperation( op, dev.oncost )
 	end,	
-	MainOp = function( self, a )
-		local op = self.main_op( dev.onoperation, a )
-		self:AddCategory( op.category )
+	MainOp = function( self, a, tgmode )
+		local op, tim
+		if tgmode then 
+			op=self.target_op(a)
+			tim=dev.ontarget+dev.onoperation
+		else
+			op=self.main_op(a)
+			tim=dev.onoperation
+		end
+		self:AddCategory( op.action.category )
 		self:AddRequired( op, dev.ontarget )
-		return self:AddOperation( op, dev.ontarget+dev.onoperation )
+		local newop=self:AddOperation( op, tim )
+		local info=a.opinfo
+		if info~=false then
+			if info==nil then info={} end
+			if info.op==nil then info.op=op end
+			self:AddActivationInfo(info)
+		end
+		return newop
 	end,
 	MainTargetOp = function( self, a )
-		local op = self.target_op( a )
-		self:AddCategory( op.category )
 		self:SetTakeTarget()
-		self:AddRequired( op, dev.ontarget )
-		return self:AddOperation( op, dev.ontarget+dev.onoperation )
+		return self:MainOp(a, true)
 	end,
 	MainActivationOp = function( self, a )
-		local op = self.main_op( dev.ontarget, a )
+		local op = self.op(a)
 		self:AddRequired( op, dev.ontarget )
 		return self:AddOperation( op, dev.ontarget )
 	end,
@@ -233,6 +201,46 @@ dev.activation_eclass = dev.new_class(
 		local c=self._multitg
 		self._multitg = c+1
 		return c
+	end,
+	
+	--
+	-- OpInfo
+	--	
+	-- 実際に登録
+	SetActivationInfo = function( self, est, ent )
+		if self:fillAcInfoCategory(ent)==nil then
+			return
+		elseif ent.op then
+			ent.op.action:FillActivationInfo( est, ent, ent.op, dev.option_arg(ent.operand_index,1) )
+		end	
+		if ent.player==nil then ent.player=0 end
+		if ent.value==nil then ent.value=0 end
+		Duel.SetOperationInfo( 
+			dev.option_arg(ent.insert_index,0), 
+			ent.category,
+			ent.cards, 
+			dev.eval(ent.count,est),
+			dev.eval(ent.player,est),
+			dev.eval(ent.value,est)
+		)
+	end,
+	
+	-- 登録を予約する
+	AddActivationInfo = function( self, entry )
+		local ent=dev.table.shallowcopy(entry)
+		if self:fillAcInfoCategory(ent)==nil then
+			return
+		end
+		return self:AddOperation( function(est) self:SetActivationInfo(est, ent) end, dev.ontarget )
+	end,
+	
+	fillAcInfoCategory = function( self, ent )
+		local cat=dev.option_arg(ent.category, ent[1])
+		if ent.op and cat==nil then
+			cat=ent.op.action.act_category
+		end
+		ent.category = cat
+		return cat
 	end,
 	
 	--

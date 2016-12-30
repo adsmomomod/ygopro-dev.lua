@@ -89,8 +89,7 @@ dev.op = dev.new_class(
 		local opst = self:beginOp( est, 1, oprst )
 		
 		-- 対象決定
-		local operands=self:selOperand( est ) 
-		opst:setOperand( operands )
+		local operands=self:selOperand( est, opst ) 
 		
 		-- 動作実行
 		local ops = operands:GetTable()
@@ -143,7 +142,7 @@ dev.op = dev.new_class(
 	end,
 	
 	-- 操作対象となるカードを選ぶ
-	selOperand = function( self, est )
+	selOperand = function( self, est, opst )
 		local opc=dev.operand_container()
 		if self.operand~=nil then
 			local ret=self.operand:Select( est )
@@ -153,6 +152,7 @@ dev.op = dev.new_class(
 			end
 			opc:Format( ret )
 		end
+		opst:setOperand( opc )
 		return opc
 	end,
 	
@@ -160,14 +160,14 @@ dev.op = dev.new_class(
 	-- その他のメンバ関数
 	--
 	-- cnt, cnt / min, max を返す
-	GetObjectMinMax = function( self, est, opdidx, oprst )
+	GetMinMaxOperand = function( self, est, opdidx, oprst )
 		local opst = self:beginOp( est, opdidx, oprst )
 		local c1, c2 = 0, 0
 		if self.operand then
 			if self.operand.GetMinMax then
-				c1, c2 = dev.GetMinMaxOperand( self.operand, est )
+				c1, c2 = self.operand:GetMinMax(est)
 			elseif self.operand.Count then
-				c1 = dev.CountOperand( self.operand, est )
+				c1 = self.operand:Count(est)
 				c2 = c1
 			end
 		end
@@ -176,16 +176,16 @@ dev.op = dev.new_class(
 	end,
 	
 	-- オブジェクトの領域をまとめて返す
-	GetObjectLocation = function( self, est, opdidx, oprst )
+	LocationOperand = function( self, est, opdidx, oprst )
 		local opst = self:beginOp( est, opdidx, oprst )
 		if self.operand==nil then return dev.location_info() end
 		return self:exitOp( est, self.operand:Location(est) )
 	end,
 	
 	-- 操作対象となるカードをすべて取得
-	GetAllObject = function( self, est, opdidx, oprst )
+	GetAllOperand = function( self, est, opdidx, oprst )
 		local opst = self:beginOp( est, opdidx, oprst )
-		return self:exitOp( est, self.operand:GetAll(est) )	
+		return self:exitOp( est, self.operand:GetAll(est) )
 	end,
 	
 	-- フラグ
@@ -378,9 +378,10 @@ dev.primal_object = dev.new_class(
 dev.action = dev.new_class(
 {
 	__init = function( self, cat, hint, arity )
-		self.category 	= cat
-		self.hint 		= hint
-		self.arity 		= dev.option_arg(arity,1)
+		self.category 	 = cat
+		self.hint 		 = hint
+		self.arity 		 = dev.option_arg(arity,1)
+		self.act_category = cat
 	end,
 	CheckOperable = function(self, est) 
 		return true
@@ -393,5 +394,30 @@ dev.action = dev.new_class(
 		end
 	end,
 	
+	--
+	FillActivationInfo = function( self, est, ent, op, opindex )
+		local opr=est:GetOpOperand( op, opindex )
+		if opr then
+			if ent.cards==nil then
+				ent.cards = opr
+			end
+			if ent.count==nil then
+				ent.count = opr:GetCount()
+			end
+		else
+			if ent.cards==true then
+				local og = op:GetAllOperand( est, opindex )
+				ent.cards = og
+			end
+			if ent.count==nil then
+				local mi, mx = op:GetMinMaxOperand( est, opindex )
+				ent.count = mi
+			end
+			if ent.location==true then
+				local l = op:LocationOperand( est, opindex )
+				ent.value = l
+			end
+		end
+	end,
 })
 

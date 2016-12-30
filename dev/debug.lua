@@ -128,7 +128,7 @@ dev.require = function(...) return true end -- 普段はここに転送、なに
 --
 -- 関数の実行を記録する
 --
-dev.hook_call = function(li)
+dev.hook_call_all = function(li)
 	if li.std then
 		li["Duel"]=Duel
 		li["Card"]=Card
@@ -148,7 +148,15 @@ dev.hook_call = function(li)
 		end
 	end
 end
+dev.hook_call = function( tbl, name, tblname )
+	if tblname==nil then tblname=dev.typestr(tbl) end
+	local f=tbl[name]
+	tbl[name]=dev.call_hook_proc(tblname.."."..name, f)
+end
 
+--
+-- 
+--
 local call_hook_stack = {
 	Push = function(self, name)
 		if self.lock then return false end
@@ -185,7 +193,6 @@ local call_hook_stack = {
 		return temp_ret
 	end,
 }
-
 dev.call_hook_proc = function(name, fn)
 	return function( ... )
 		if call_hook_stack:Push(name) then
