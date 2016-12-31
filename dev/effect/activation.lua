@@ -244,9 +244,7 @@ dev.activation_eclass = dev.new_class(
 	end,
 	
 	--
-	--
-	--
-	Setup = function( self, args )
+	setup = function( self, args )
 		if args and args.trigger then
 			self:SetCode(args.trigger)
 		else
@@ -265,16 +263,14 @@ dev.activation_eclass = dev.new_class(
 --
 -- 魔法罠の発動
 function dev.effect.Activation( self, args )
-	effect_ctor( dev.activation_eclass, self, args )
-	
+	self:Construct( dev.activation_eclass, args )	
 	self:SetType(EFFECT_TYPE_ACTIVATE)
 	self:SetRange(nil) -- 自動追加されるので
 end
 
 -- 起動効果
 function dev.effect.Ignition( self, args )
-	effect_ctor( dev.activation_eclass, self, args )
-	
+	self:Construct( dev.activation_eclass, args )	
 	self:SetType(EFFECT_TYPE_IGNITION)
 	self:SetCode(0)
 end
@@ -282,7 +278,7 @@ end
 -- 誘発効果
 -- 強制
 function dev.effect.Trigger( self, args, t )
-	effect_ctor( dev.activation_eclass, self, args )
+	self:Construct( dev.activation_eclass, args )
 	
 	if args.optional or args.optional_if then
 		self:ReplaceType( EFFECT_TYPE_TRIGGER_F, EFFECT_TYPE_TRIGGER_O )
@@ -303,7 +299,7 @@ end
 
 -- 誘発即時効果
 function dev.effect.QuickTrigger( self, args )
-	effect_ctor( dev.activation_eclass, self, args )
+	self:Construct( dev.activation_eclass, args )
 
 	if self:GetCode()==EVENT_FREE_CHAIN or (args and args.optional) then
 		self:SetType( EFFECT_TYPE_QUICK_O )
@@ -314,7 +310,7 @@ end
 
 -- リバース効果
 function dev.effect.Flip( self, args )
-	effect_ctor( dev.activation_eclass, self, args )
+	self:Construct( dev.activation_eclass, args )
 	
 	if args and args.optional then
 		self:SetType( EFFECT_TYPE_SINGLE+EFFECT_TYPE_FLIP+EFFECT_TYPE_TRIGGER_O )

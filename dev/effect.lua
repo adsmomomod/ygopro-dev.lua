@@ -116,11 +116,3 @@ end
 --
 dev.effect = {}
 
--- 効果コンストラクタのひな形
-local function effect_ctor( cls, self, args, ... )
-	dev.instantiate( self, cls, ... )
-	if args==nil then args={} end
-	self:Setup( args )
-end
-
-

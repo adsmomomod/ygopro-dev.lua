@@ -311,7 +311,8 @@ dev.primal_object = dev.new_class(
 	end,
 	
 	GetMinMax = function(self, est)
-		return 1, self:Count(est)
+		local c=self:Count(est)
+		return c, c
 	end,
 	
 	Exists = function( self, est )
@@ -405,12 +406,12 @@ dev.action = dev.new_class(
 				ent.count = opr:GetCount()
 			end
 		else
-			if ent.cards==true then
+			if self.ActivationInfoParam then
+				ent.player, ent.value, ent.count = self:ActivationInfoParam( self, est ) -- これがそろっていれば大丈夫？
+			end
+			if ent.cards==nil then
 				local og = op:GetAllOperand( est, opindex )
 				ent.cards = og
-			end
-			if self.ActivationInfoParam then
-				ent.player, ent.value, ent.count = self:ActivationInfoParam( self, est )
 			end
 			if ent.count==nil then
 				local mi, mx = op:GetMinMaxOperand( est, opindex )

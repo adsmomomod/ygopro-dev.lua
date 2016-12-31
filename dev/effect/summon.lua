@@ -100,9 +100,7 @@ dev.summon_proc_eclass = dev.new_class(
 	end,
 	
 	-- 設定
-	Setup = function( self, args )
-		dev.require( args, "table" )
-		
+	setup = function( self, args )
 		-- type
 		if args.type then
 			self:SetValue(args.type)
@@ -172,7 +170,7 @@ dev.summon_proc_eclass = dev.new_class(
 --
 -- 召喚
 function dev.effect.SummonProcBase( self, args, isfield, iseffect )
-	effect_ctor( dev.summon_proc_eclass, self, args, isfield )
+	self:Construct( dev.summon_proc_eclass, args, isfield )
 	self:SetProperty(EFFECT_FLAG_UNCOPYABLE)
 	if iseffect==true then
 		self:AddProperty(EFFECT_FLAG_CANNOT_DISABLE)

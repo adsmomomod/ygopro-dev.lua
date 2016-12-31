@@ -200,9 +200,54 @@ dev.effect_class = dev.new_class(
 		end
 	end,
 	
+	--
+	-- 効果クラスを創設する
+	Construct = function( self, class, args, ... )
+		if args==nil then args={} end
+		
+		-- 自身を指定のクラス型へ変換し初期化
+		if class~=nil then
+			dev.instantiate( self, class, ... )
+		end
+		
+		-- 登録用パラメータを取り出す
+		if args.owner~=nil then 
+			self:SetOwner(args.owner) 
+			args.owner=nil
+		end
+		if args.global==true then
+			self:SetGlobal()
+			args.global=nil
+		end
+		if args.forced~=nil then 
+			self:SetForced(args.forced) 
+			args.forced=nil
+		end
+		
+		-- クラスごとにカスタマイズされたパラメータ補完関数を呼ぶ
+		if self.setup~=nil then
+			self:setup( args )
+		end
+	end,
+	
+	-- 用意されたコンストラクタを実行する
+	Inherit = function( self, args )	
+		local initer=args[1]
+		if initer then
+			initer( self, args )
+		end
+	end,
+	
 	-- 効果登録に関するパラメータ
-	SetPlayerEffect = function(self, p)	self._playere = p 	return self end,
-	SetForced 		= function(self)	self._forced = true return self end,
+	SetOwner	= function(self, v) self._owner = v     return self end,
+	SetGlobal	= function(self)	self._owner = false return self end,
+	SetForced 	= function(self)	self._forced = true return self end,
+	
+	GetOwner = function( self, regc )
+		if self._owner==nil then return regc
+		elseif self._owner==false then return nil
+		else return self._owner end
+	end,
 	
 	-- count
 	SetCountLimitByName = function( self, cnt )
@@ -453,11 +498,15 @@ dev.effect_class = dev.new_class(
 })
 
 -- EffectClassを作成
-function dev.BuildEffectClass( initer, cdata )
+function dev.BuildEffectClass( initargs, cdata )
 	
 	-- ユーザー定義のコンストラクタを実行
-	local inst = dev.effect_class(cdata)
-	initer( inst )
+	local inst = dev.effect_class( cdata )
+	if type(initargs)=="function" then
+		inst:Inherit{ initargs }
+	else
+		inst:Inherit( initargs )
+	end
 	
 	-- プロパティを抽出しビルド
 	for _, prop in ipairs( eclass_prop_list ) do
@@ -471,7 +520,6 @@ function dev.BuildEffectClass( initer, cdata )
 		dev.print( " 作成された効果クラス：" )
 		dev.print_effect_class( inst )
 	end
-	
 	return inst	
 end
 
@@ -507,19 +555,23 @@ end
 
 -- 作成 & 登録
 function dev.RegisterEffect( c, eclass )
-	local e = dev.CreateEffect( eclass, c )
-	if eclass._playere~=nil then
-		Duel.RegisterEffect(e, eclass._playere)
+	local ec = eclass:GetOwner(c)	
+	local e = dev.CreateEffect( eclass, ec )
+	if type(c)=="number" then
+		Duel.RegisterEffect(e, c)
 	else
-		c:RegisterEffect(e, dev.option_arg(eclass._forced, false) )
+		c:RegisterEffect( e, dev.option_arg(eclass._forced, false) )
 	end
 	return e, eclass
 end
-function dev.RegisterNewEffect( c, eclassctor )
-	local eclass = dev.BuildEffectClass( eclassctor, { type=c:GetType(), id=c:GetCode(), } )
+function dev.RegisterNewEffect( c, initargs )
+	local cdata=nil
+	if c then cdata={ type=c:GetType(), id=c:GetCode(), } end
+	local eclass = dev.BuildEffectClass( initargs, cdata )
 	return dev.RegisterEffect( c, eclass )
 end
 
-
+-- Card
+Card.RegisterNewEffect = dev.RegisterNewEffect
 
 

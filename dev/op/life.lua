@@ -39,9 +39,11 @@ dev.lp_object = dev.new_class(
 dev.lifepoint = dev.new_class(
 {
 	__init = function( self, args )
-		self.player = dev.option_arg( args.player, dev.you )
+		if args==nil then args={} end
+		self.player = dev.option_arg( args[1], dev.you )
 		self.value = dev.option_arg( args.value, 100 )
-		self.proportion = args.div
+		self.proportion = args.proportion
+		if args.half then self.proportion = 2 end
 	end,
 	
 	GetAll = function( self, est )
@@ -99,17 +101,6 @@ dev.lifepoint = dev.new_class(
 	end,
 })
 
--- eval
-function dev.your_lifepoint( args )
-	args = dev.option_arg( args, {} )
-	args.player = dev.you
-	return dev.lifepoint( args )
-end
-function dev.opponent_lifepoint( args )
-	args = dev.option_arg( args, {} )
-	args.player = dev.opponent
-	return dev.lifepoint( args )
-end
 
 -- 
 -- ================================================================================
