@@ -24,9 +24,9 @@
 -- 
 @include@{dev/op/generic}
 @include@{dev/op/card}
-@include@{dev/op/card_summon}
-@include@{dev/op/card_move}
-@include@{dev/op/card_status}
+@include@{dev/op/action_summon}
+@include@{dev/op/action_move}
+@include@{dev/op/action_status}
 @include@{dev/op/life}
 
 

@@ -409,6 +409,9 @@ dev.action = dev.new_class(
 				local og = op:GetAllOperand( est, opindex )
 				ent.cards = og
 			end
+			if self.ActivationInfoParam then
+				ent.player, ent.value, ent.count = self:ActivationInfoParam( self, est )
+			end
 			if ent.count==nil then
 				local mi, mx = op:GetMinMaxOperand( est, opindex )
 				ent.count = mi

@@ -52,12 +52,8 @@ dev.do_special_summon = dev.new_class(dev.action,
 		return Duel.SpecialSummon(g, self.sumtype, sump, sumtp, self.nocheck, self.nolimit, self.sumpos)
 	end,
 	
-	OperationInfoParams = function( self, est )
-		local l=0
-		--for i, cl in ipairs(self.cards) do
-		--	l = bit.bor(l, bit.bor(cl.location1, cl.location2))
-		--end
-		return l, dev.eval(self.sumplayer,est)
+	ActivationInfoParams = function( self, est )
+		return self.sumplayer, 0
 	end,
 })
 
@@ -94,6 +90,10 @@ dev.do_synchro_summon = dev.new_class(dev.action,
 			Duel.SynchroSummon( sump, c, nil, mat )
 		end
 		return 1
+	end,
+	
+	ActivationInfoParams = function( self, est )
+		return self.sumplayer, LOCATION_EXTRA, 1
 	end,
 })
 

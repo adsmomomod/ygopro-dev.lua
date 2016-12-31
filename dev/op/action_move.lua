@@ -132,7 +132,7 @@ dev.do_sendto_hand = dev.new_class(dev.action,
 		if self.confirmer==nil then
 			if self.hander~=nil then
 				self.confirmer=self.hander:GetReverse()
-			elseif args.hint==HINTMSG_ATOHAND then
+			elseif self.hint==HINTMSG_ATOHAND then
 				self.confirmer=dev.opponent
 			end
 		end
