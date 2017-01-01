@@ -16,6 +16,7 @@
 @include@{dev/player_location}
 @include@{dev/pie}
 @include@{dev/script}
+@include@{dev/single}
 
 -- 具体的な
 @include@{dev/effect/activation}
