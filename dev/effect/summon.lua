@@ -119,7 +119,7 @@ dev.summon_proc_eclass = dev.new_class(
 		if args.location then
 			self:SetRange(args.location)
 		end
-		-- pos / opponent
+		-- opponent = pos
 		if args.opponent then
 			self:AddProperty( EFFECT_FLAG_SPSUM_PARAM )
 			self:SetTargetRange( args.opponent, 1 )
@@ -145,6 +145,11 @@ dev.summon_proc_eclass = dev.new_class(
 		self:AddRequired( args, dev.oncond )
 	end,
 	
+	-- target
+	TargetHandler = function( self, est )
+		return self.Target( est )
+	end,
+	
 	-- condition
 	ConditionHandler = function( self, est )
 		self:DebugDisp("SetCondition Func Called (do)", est)
@@ -168,8 +173,7 @@ dev.summon_proc_eclass = dev.new_class(
 -- effect
 --
 --
--- 召喚
-function dev.effect.SummonProcBase( self, args, isfield, iseffect )
+local summonProcBase = function( self, args, isfield, iseffect )
 	self:Construct( dev.summon_proc_eclass, args, isfield )
 	self:SetProperty(EFFECT_FLAG_UNCOPYABLE)
 	if iseffect==true then
@@ -181,30 +185,48 @@ function dev.effect.SummonProcBase( self, args, isfield, iseffect )
 		self:SetType(EFFECT_TYPE_SINGLE)
 	end
 end
-function dev.effect.SummonProc( self, args )
-	dev.effect.SummonProcBase( self, args )
-	self:SetCode( EFFECT_SUMMON_PROC )
-end
-function dev.effect.OtherSummonProc( self, args )
-	dev.effect.SummonProcBase( self, args, true )
-	self:SetCode( EFFECT_SUMMON_PROC )
-	if args.player then
-		self:SetPlayerEffect( args.player )
-	end
-end
-function dev.effect.LimitSummonProc( self, args )
-	dev.effect.SummonProcBase( self, args )
-	self:SetCode( EFFECT_LIMIT_SUMMON_PROC )
-end
 
--- 特殊召喚
-function dev.effect.SpecialSummonProc( self, args )
-	dev.effect.SummonProcBase( self, args, true, true )
-	self:SetCode(EFFECT_SPSUMMON_PROC)
-end
-function dev.effect.LimitSpecialSummonProc( self, args )
-	dev.effect.SummonProcBase( self, args, true )
-	self:SetCode(EFFECT_SPSUMMON_PROC)
-end
+-- 自身の召喚手順
+dev.effect.SummonProc = dev.effect.Builder( 
+	function( self, args )
+		summonProcBase( self, args )
+		self:SetCode( EFFECT_SUMMON_PROC )
+	end
+)
+
+-- ほかのモンスターの召喚手順
+dev.effect.OtherSummonProc = dev.effect.Builder(
+	function( self, args )
+		summonProcBase( self, args, true )
+		self:SetCode( EFFECT_SUMMON_PROC )
+		if args.player then
+			self:SetPlayerEffect( args.player )
+		end
+	end
+)
+
+-- 自身の唯一の召喚手順
+dev.effect.LimitSummonProc = dev.effect.Builder(
+	function( self, args )
+		summonProcBase( self, args )
+		self:SetCode( EFFECT_LIMIT_SUMMON_PROC )
+	end
+)
+
+-- 自身の特殊召喚手順
+dev.effect.SpecialSummonProc = dev.effect.Builder(
+	function( self, args )
+		summonProcBase( self, args, true, true )
+		self:SetCode( EFFECT_SPSUMMON_PROC )
+	end
+)
+
+-- 自身の唯一の特殊召喚手順
+dev.effect.LimitSpecialSummonProc = dev.effect.Builder(
+	function( self, args )
+		summonProcBase( self, args, true )
+		self:SetCode( EFFECT_SPSUMMON_PROC )
+	end
+)
 
 

@@ -230,12 +230,9 @@ dev.effect_class = dev.new_class(
 		end
 	end,
 	
-	-- 用意されたコンストラクタを実行する
-	Inherit = function( self, args )	
-		local initer=args[1]
-		if initer then
-			initer( self, args )
-		end
+	-- 用意されたビルダを実行する
+	Inherit = function( self, builder )
+		if builder then builder( self ) end
 	end,
 	
 	-- 効果登録に関するパラメータ
@@ -497,16 +494,51 @@ dev.effect_class = dev.new_class(
 	end,
 })
 
--- EffectClassを作成
-function dev.BuildEffectClass( initargs, cdata )
+-- 効果クラスのデバッグ表示
+function dev.print_effect_class( e, ename )
+	ename=dev.option_arg(ename,"e")
+	dev.print(" >>> Effect "..ename.." <<< ")
+	
+	for _, prop in ipairs( eclass_prop_list ) do
+		local s, ret = prop:Format( e )
+		if s and ret then
+			dev.print( prop.name, " = ", s )
+		end
+	end
+end
+
+
+--
+-- 効果クラスを作成するBuilder
+--
+dev.effect_class_builder = dev.new_class(
+{
+	__init = function( self, args, morearg )
+		self.args = dev.option_arg(args,{})
+		self.morearg = morearg
+		setmetatable( self, { __call = self.Call } )
+	end,
+	Call = function( self, class )
+		self.Build( class, self.args, self.morearg )
+	end,
+})
+
+dev.effect = {}
+dev.effect.Builder = function( fn )
+	return dev.new_named_class( "effect_class_builder_alt", dev.effect_class_builder, { Build = fn } )	
+end
+
+
+--
+-- Initerや効果クラスから実際に効果を作成・登録
+--
+
+-- Initer -> 効果クラス
+function dev.BuildEffectClass( builder, cdata )
 	
 	-- ユーザー定義のコンストラクタを実行
 	local inst = dev.effect_class( cdata )
-	if type(initargs)=="function" then
-		inst:Inherit{ initargs }
-	else
-		inst:Inherit( initargs )
-	end
+	inst:Inherit( builder )
 	
 	-- プロパティを抽出しビルド
 	for _, prop in ipairs( eclass_prop_list ) do
@@ -523,7 +555,7 @@ function dev.BuildEffectClass( initargs, cdata )
 	return inst	
 end
 
--- EffectClassから効果オブジェクトを作成
+-- 効果クラス -> 効果
 function dev.CreateEffect( eclass, c )
 	local e = nil
 	if not c then
@@ -540,20 +572,7 @@ function dev.CreateEffect( eclass, c )
 	return e
 end
 
--- EffectClassのデバッグ表示
-function dev.print_effect_class( e, ename )
-	ename=dev.option_arg(ename,"e")
-	dev.print(" >>> Effect "..ename.." <<< ")
-	
-	for _, prop in ipairs( eclass_prop_list ) do
-		local s, ret = prop:Format( e )
-		if s and ret then
-			dev.print( prop.name, " = ", s )
-		end
-	end
-end
-
--- 作成 & 登録
+-- 効果作成 & 登録
 function dev.RegisterEffect( c, eclass )
 	local ec = eclass:GetOwner(c)	
 	local e = dev.CreateEffect( eclass, ec )
@@ -564,14 +583,20 @@ function dev.RegisterEffect( c, eclass )
 	end
 	return e, eclass
 end
-function dev.RegisterNewEffect( c, initargs )
+function dev.RegisterNewEffect( c, builder )
 	local cdata=nil
-	if c then cdata={ type=c:GetType(), id=c:GetCode(), } end
-	local eclass = dev.BuildEffectClass( initargs, cdata )
+	if c and type(c)~="number" then 
+		cdata={ type=c:GetType(), id=c:GetCode(), } 
+	end
+	
+	local eclass = dev.BuildEffectClass( builder, cdata )
 	return dev.RegisterEffect( c, eclass )
 end
 
 -- Card
 Card.RegisterNewEffect = dev.RegisterNewEffect
+
+
+
 
 

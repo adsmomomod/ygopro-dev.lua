@@ -139,7 +139,6 @@ dev.hook_call_all = function(li)
 		if type(val)=="table" or type(val)=="userdata" then
 			local mname=dev.typestr(val)
 			if tonumber(name)==nil then mname=name end
-			dev.print(name)
 			for k, v in pairs(val) do
 				if type(v)=="function" then
 					val[k]=dev.call_hook_proc(mname.."."..k, v)
@@ -204,6 +203,10 @@ dev.call_hook_proc = function(name, fn)
 		end
 	end
 end
+dev.call_param_hook = function(name)
+	return dev.call_hook_proc(name, function(...) return end)
+end
+
 
 
 

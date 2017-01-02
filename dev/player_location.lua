@@ -10,6 +10,9 @@ dev.you_p = dev.new_class(
 	GetReverse = function(self)
 		return dev.opponent
 	end,
+	GetAbsolute = function(self)
+		return 1, 0
+	end,
 })
 dev.opponent_p = dev.new_class(
 {
@@ -19,6 +22,9 @@ dev.opponent_p = dev.new_class(
 	GetReverse = function(self)
 		return dev.you
 	end,
+	GetAbsolute = function(self)
+		return 0, 1
+	end,
 })
 dev.both_p = dev.new_class(
 {
@@ -27,6 +33,9 @@ dev.both_p = dev.new_class(
 	end,
 	GetReverse = function(self)
 		return dev.nilplayer -- none?
+	end,
+	GetAbsolute = function(self)
+		return 1, 1
 	end,
 })
 dev.you 		= dev.you_p()

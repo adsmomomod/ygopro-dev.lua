@@ -262,60 +262,73 @@ dev.activation_eclass = dev.new_class(
 --
 --
 -- 魔法罠の発動
-function dev.effect.Activation( self, args )
-	self:Construct( dev.activation_eclass, args )	
-	self:SetType(EFFECT_TYPE_ACTIVATE)
-	self:SetRange(nil) -- 自動追加されるので
-end
+dev.effect.Activation = dev.effect.Builder(
+	function( self, args )
+		self:Construct( dev.activation_eclass, args )	
+		self:SetType(EFFECT_TYPE_ACTIVATE)
+		self:SetRange(nil) -- 自動追加されるので
+	end
+)
 
 -- 起動効果
-function dev.effect.Ignition( self, args )
-	self:Construct( dev.activation_eclass, args )	
-	self:SetType(EFFECT_TYPE_IGNITION)
-	self:SetCode(0)
-end
+dev.effect.Ignition = dev.effect.Builder(
+	function( self, args )
+		self:Construct( dev.activation_eclass, args )	
+		self:SetType(EFFECT_TYPE_IGNITION)
+		self:SetCode(0)
+	end
+)
 
 -- 誘発効果
 -- 強制
-function dev.effect.Trigger( self, args, t )
-	self:Construct( dev.activation_eclass, args )
-	
-	if args.optional or args.optional_if then
-		self:ReplaceType( EFFECT_TYPE_TRIGGER_F, EFFECT_TYPE_TRIGGER_O )
-		if args.optional_if then
-			self:SetProperty( EFFECT_FLAG_DELAY )
-		end
-	else
-		self:ReplaceType( EFFECT_TYPE_TRIGGER_O, EFFECT_TYPE_TRIGGER_F )
-	end	
-	self:AddType( t )
+dev.effect.Trigger = dev.effect.Builder(
+	function( self, args, typ )
+		self:Construct( dev.activation_eclass, args )
+		
+		if args.optional or args.optional_if then
+			self:ReplaceType( EFFECT_TYPE_TRIGGER_F, EFFECT_TYPE_TRIGGER_O )
+			if not args.optional_if then
+				self:SetProperty( EFFECT_FLAG_DELAY )
+			end
+		else
+			self:ReplaceType( EFFECT_TYPE_TRIGGER_O, EFFECT_TYPE_TRIGGER_F )
+		end	
+		
+		self:AddType( typ )
+	end
+)
+dev.effect.SingleTrigger = function( args )
+	return dev.effect.Trigger( args, EFFECT_TYPE_SINGLE )
 end
-function dev.effect.SingleTrigger( self, args )
-	dev.effect.Trigger( self, args, EFFECT_TYPE_SINGLE )
-end
-function dev.effect.FieldTrigger( self, args )
-	dev.effect.Trigger( self, args, EFFECT_TYPE_FIELD )
+dev.effect.FieldTrigger = function( args )
+	return dev.effect.Trigger( args, EFFECT_TYPE_FIELD )
 end
 
 -- 誘発即時効果
-function dev.effect.QuickTrigger( self, args )
-	self:Construct( dev.activation_eclass, args )
+dev.effect.QuickTrigger = dev.effect.Builder( 
+	function( self, args )
+		self:Construct( dev.activation_eclass, args )
 
-	if self:GetCode()==EVENT_FREE_CHAIN or (args and args.optional) then
-		self:SetType( EFFECT_TYPE_QUICK_O )
-	else
-		self:SetType( EFFECT_TYPE_QUICK_F )
-	end	
-end
+		if self:GetCode()==EVENT_FREE_CHAIN or (args and args.optional) then
+			self:SetType( EFFECT_TYPE_QUICK_O )
+		else
+			self:SetType( EFFECT_TYPE_QUICK_F )
+		end	
+	end
+)
 
 -- リバース効果
-function dev.effect.Flip( self, args )
-	self:Construct( dev.activation_eclass, args )
-	
-	if args and args.optional then
-		self:SetType( EFFECT_TYPE_SINGLE+EFFECT_TYPE_FLIP+EFFECT_TYPE_TRIGGER_O )
-		self:SetProperty( EFFECT_FLAG_DELAY )
-	else
-		self:SetType( EFFECT_TYPE_SINGLE+EFFECT_TYPE_FLIP+EFFECT_TYPE_TRIGGER_F )
+dev.effect.Flip = dev.effect.Builder(
+	function( self, args )
+		self:Construct( dev.activation_eclass, args )
+		
+		if args and args.optional then
+			self:SetType( EFFECT_TYPE_SINGLE+EFFECT_TYPE_FLIP+EFFECT_TYPE_TRIGGER_O )
+			self:SetProperty( EFFECT_FLAG_DELAY )
+		else
+			self:SetType( EFFECT_TYPE_SINGLE+EFFECT_TYPE_FLIP+EFFECT_TYPE_TRIGGER_F )
+		end
 	end
-end
+)
+
+

@@ -21,6 +21,7 @@
 -- 具体的な
 @include@{dev/effect/activation}
 @include@{dev/effect/summon}
+@include@{dev/effect/continuous}
 
 -- 
 @include@{dev/op/generic}
