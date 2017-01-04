@@ -75,10 +75,6 @@ dev.summon_tribute_sel = dev.new_class(dev.sel,
 -- 
 dev.summon_proc_eclass = dev.new_class(
 {
-	__init = function( self, field )
-		self.isfield=field
-	end,
-
 	--
 	-- 状態クラス
 	--
@@ -100,33 +96,19 @@ dev.summon_proc_eclass = dev.new_class(
 	end,
 	
 	-- 設定
-	setup = function( self, args )
-		-- type
-		if args.type then
-			self:SetValue(args.type)
-		end
-		-- target
-		if args.target then
-			local filter = args.target
-			local fn = function(est) return filter(est:GetTarget(), est) end
-			if self.isfield then
-				self.Target = fn
-			else
-				self:AddRequired( fn, dev.oncond )
-			end	
-		end
-		-- location
-		if args.location then
-			self:SetRange(args.location)
-		end
-		-- opponent = pos
-		if args.opponent then
-			self:AddProperty( EFFECT_FLAG_SPSUM_PARAM )
-			self:SetTargetRange( args.opponent, 1 )
-		end
+	SetSummonType = function( self, t )
+		self:SetValue(t)
 	end,
 	
+	SetSummonPos = function( self, pos, player )
+		if player==nil then player=dev.you end
+		self:AddProperty( EFFECT_FLAG_SPSUM_PARAM )
+		self:SetTargetRange( pos, player:GetAbsolute() )
+	end,
+	
+	--
 	-- オペレーション
+	--
 	ProcOp = function( self, args )
 		local op = dev.op( args )
 		self:AddRequired( op, dev.oncond )
@@ -152,19 +134,10 @@ dev.summon_proc_eclass = dev.new_class(
 	
 	-- condition
 	ConditionHandler = function( self, est )
-		self:DebugDisp("SetCondition Func Called (do)", est)
 		if est:GetTarget()==nil then	
 			return true
 		end		
-		if not self:CheckRequiredCondition( est ) then 
-			self:DebugDisp("使用条件が満たされていません", est)
-			return false
-		elseif not est:CheckPieCounters() then 
-			self:DebugDisp("Condition Pieが足りません", est)
-			return false 
-		end
-		
-		return true
+		return dev.effect_class.ConditionHandler( self, est )
 	end,
 })
 
@@ -173,60 +146,55 @@ dev.summon_proc_eclass = dev.new_class(
 -- effect
 --
 --
-local summonProcBase = function( self, args, isfield, iseffect )
-	self:Construct( dev.summon_proc_eclass, args, isfield )
+local summonProcBase = function( self, iseffect )
+	self:Construct( dev.summon_proc_eclass )
 	self:SetProperty(EFFECT_FLAG_UNCOPYABLE)
-	if iseffect==true then
+	if not iseffect then
 		self:AddProperty(EFFECT_FLAG_CANNOT_DISABLE)
-	end	
-	if isfield==true then
-		self:SetType(EFFECT_TYPE_FIELD)
-	else
-		self:SetType(EFFECT_TYPE_SINGLE)
 	end
 end
 
 -- 自身の召喚手順
-dev.effect.SummonProc = dev.effect.Builder( 
-	function( self, args )
-		summonProcBase( self, args )
-		self:SetCode( EFFECT_SUMMON_PROC )
+dev.effect.SummonProc = function( self )
+	summonProcBase( self )
+	self:SetCode( EFFECT_SUMMON_PROC )
+	self:SetType( EFFECT_TYPE_SINGLE )
+	self.SetTarget = function( self, filter )
+		local fn = function(est) return filter(est:GetTarget(), est) end
+		self:AddRequired( fn, dev.oncond )
 	end
-)
+end
 
 -- ほかのモンスターの召喚手順
-dev.effect.OtherSummonProc = dev.effect.Builder(
-	function( self, args )
-		summonProcBase( self, args, true )
-		self:SetCode( EFFECT_SUMMON_PROC )
-		if args.player then
-			self:SetPlayerEffect( args.player )
-		end
+dev.effect.OtherSummonProc = function( self )
+	summonProcBase( self )
+	self:SetCode( EFFECT_SUMMON_PROC )
+	self:SetType( EFFECT_TYPE_FIELD )
+	self:SetTargetRange( LOCATION_HAND )	
+	self.SetTarget = function( self, filter )
+		self.Target = function(est) return filter(est:GetTarget(), est) end
 	end
-)
+end
 
 -- 自身の唯一の召喚手順
-dev.effect.LimitSummonProc = dev.effect.Builder(
-	function( self, args )
-		summonProcBase( self, args )
-		self:SetCode( EFFECT_LIMIT_SUMMON_PROC )
-	end
-)
+dev.effect.LimitSummonProc = function( self )
+	summonProcBase( self )
+	self:SetCode( EFFECT_LIMIT_SUMMON_PROC )
+	self:SetType( EFFECT_TYPE_SINGLE )
+end
 
 -- 自身の特殊召喚手順
-dev.effect.SpecialSummonProc = dev.effect.Builder(
-	function( self, args )
-		summonProcBase( self, args, true, true )
-		self:SetCode( EFFECT_SPSUMMON_PROC )
-	end
-)
+dev.effect.SpecialSummonProc = function( self )
+	summonProcBase( self, true )
+	self:SetCode( EFFECT_SPSUMMON_PROC )
+	self:SetType( EFFECT_TYPE_FIELD )
+end
 
 -- 自身の唯一の特殊召喚手順
-dev.effect.LimitSpecialSummonProc = dev.effect.Builder(
-	function( self, args )
-		summonProcBase( self, args, true )
-		self:SetCode( EFFECT_SPSUMMON_PROC )
-	end
-)
+dev.effect.LimitSpecialSummonProc = function( self )
+	summonProcBase( self )
+	self:SetCode( EFFECT_SPSUMMON_PROC )
+	self:SetType( EFFECT_TYPE_FIELD )
+end
 
 

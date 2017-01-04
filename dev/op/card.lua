@@ -108,7 +108,7 @@ dev.zone_card = dev.new_class(dev.primal_object,
 local bind_zone = function( zone )
 	return function( args )
 		if args==nil then args = {} end
-		args.location = zone( args.player )
+		args.location = zone( args[1] )
 		return dev.zone_card( args )
 	end
 end
@@ -131,7 +131,7 @@ dev.spec_zone_card = dev.new_class( dev.zone_card,
 	__init = function( self, args )
 		dev.super_init( self, args )
 		self.cards = args.from
-	end,	
+	end,
 	GetAllObject = function( self, est )
 		local g=dev.eval(self.cards, est)
 		return g:Filter(self:GetFilter(est), self:GetException(est), est)

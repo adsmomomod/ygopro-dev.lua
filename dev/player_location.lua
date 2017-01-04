@@ -11,7 +11,10 @@ dev.you_p = dev.new_class(
 		return dev.opponent
 	end,
 	GetAbsolute = function(self)
-		return 1, 0
+		return 0
+	end,
+	FormatRange = function(self, loc)
+		return loc, 0
 	end,
 })
 dev.opponent_p = dev.new_class(
@@ -23,7 +26,10 @@ dev.opponent_p = dev.new_class(
 		return dev.you
 	end,
 	GetAbsolute = function(self)
-		return 0, 1
+		return 1
+	end,
+	FormatRange = function(self, loc)
+		return 0, loc
 	end,
 })
 dev.both_p = dev.new_class(
@@ -35,7 +41,10 @@ dev.both_p = dev.new_class(
 		return dev.nilplayer -- none?
 	end,
 	GetAbsolute = function(self)
-		return 1, 1
+		return PLAYER_ALL
+	end,
+	FormatRange = function(self, loc)
+		return loc, loc
 	end,
 })
 dev.you 		= dev.you_p()
