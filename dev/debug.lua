@@ -20,7 +20,6 @@ function dev.hook_line_locals(lv)
 		dev.print_locals(2,2+lv)
 	end, "l")	
 end
-
 -- 
 function dev.print_locals(lv,lvmax)
 	local lvstart=2+dev.option_arg(lv,0)
@@ -42,7 +41,7 @@ function dev.print_locals(lv,lvmax)
                 break
             end
             dev.print( ">", n, " [", dev.typestr(v), "]" )
-			if type(v)=="atable" then
+			if type(v)=="table" then
 				dev.print_table(v,n,0)
 			else
 				dev.print(v)

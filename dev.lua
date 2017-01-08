@@ -19,10 +19,9 @@
 @include@{dev/single}
 
 -- 具体的な
+--@include@{dev/effect/aura}
 @include@{dev/effect/activation}
 @include@{dev/effect/summon}
-@include@{dev/effect/continuous}
-@include@{dev/effect/status}
 
 -- 
 @include@{dev/op/generic}
@@ -31,5 +30,3 @@
 @include@{dev/op/action_move}
 @include@{dev/op/action_status}
 @include@{dev/op/life}
-
-

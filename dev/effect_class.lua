@@ -1,28 +1,45 @@
 --
+local handler_timing = 
+{
+	Condition = dev.oncond,
+	Cost = dev.oncost,
+	Target = dev.ontarget,
+	Operation = dev.onoperation,
+	Value = dev.onvalue,
+}
+
+--
 -- Effectの各要素に対応するアクセサを作ってやる
 --
 local eclass_prop = dev.new_named_class("effect_class_property",
 {
-	__init = function( self, name, constpfx, arith )
-		self.name = name
-		self.varname = "__var"..name
-		self.arith = arith
+	__init = function( self, args )
+		self.name = args[1]
+		self.varname = "__var"..self.name
+		self.arith = args.arith
 		
-		if type(constpfx)=="function" then
-			self.constpfx = constpfx
-		elseif type(constpfx)=="string" then
-			self.constpfx = function(s) return string.match(s, constpfx) end
+		local cstpfx=args.constant
+		if type(cstpfx)=="function" then
+			self.constpfx = cstpfx
+		elseif type(cstpfx)=="string" then
+			self.constpfx = function(s) return string.match(s, cstpfx) end
 		end
+		
+		self.altset = args.altset
 	end,
 	
 	Register = function( self, ecl )
-		-- Getter / Setter
+		-- Getter
 		ecl["Get"..self.name] = function( s )
 			local t = s[self.varname]
 			if t==nil then return nil end
 			return table.unpack(t)
 		end
-		ecl["Set"..self.name] = function( s, ... )
+		
+		-- Setter
+		local setter = self.altset
+		if setter==nil then setter="Set"..self.name end
+		ecl[setter] = function( s, ... )
 			local t = {...}
 			if #t==0 then
 				t = nil
@@ -30,13 +47,12 @@ local eclass_prop = dev.new_named_class("effect_class_property",
 			s[self.varname] = t
 			return s
 		end
-		ecl["RawSet"..self.name] = ecl["Set"..self.name]
 	
 		-- 数値のプロパティに対して
 		if self.arith then
 			ecl["Add"..self.name] = function( s, v )
 				local t = s[self.varname]
-				if t==nil then t={0} end				
+				if t==nil then t={0} end
 				if v then
 					t[1] = bit.bor( t[1], v )
 					s[self.varname] = t
@@ -64,13 +80,12 @@ local eclass_prop = dev.new_named_class("effect_class_property",
 	-- 
 	SetupEffect = function( self, ecl, e )
 		local t = ecl[self.varname]
-		if t~=nil then
-			local setterapi=Effect["Set"..self.name]
-			setterapi( e, table.unpack(t) )
-			
+		if t~=nil then			
 			if ecl._dbgmode~=nil then 
 				dev.print( "SetupEffect[", self.name, "]: ", dev.valstr(t) ) 
 			end
+			local setterapi=Effect["Set"..self.name]
+			setterapi( e, table.unpack(t) )
 		end
 	end,
 	
@@ -109,62 +124,68 @@ local eclass_prop = dev.new_named_class("effect_class_property",
 
 local eclass_handler_prop = dev.new_named_class("effect_class_handler_property", eclass_prop,
 {
-	__init = function( self, name )
-		dev.super_init( self, name )
+	__init = function( self, args )
+		args.altset = "SetRaw"..args[1].."Handler"
+		dev.super_init( self, args )
+		self.handlername = self.name.."Handler"
+	end,
+	
+	Register = function( self, ecl )
+		dev.super_call( self, "Register", ecl )
+	
+		local setter = "Set"..self.handlername
+		ecl[setter] = function( s, v )
+			s[self.handlername] = v
+			s:EnableHandler( handler_timing[self.name] )
+			return s
+		end
 	end,
 	
 	Build = function( self, ecl )
-		local t = ecl[self.varname]
-		if t==nil then
-			local f = ecl:GenerateControlHandler( self.name )
-			if f~=nil then
-				ecl[self.varname] = {f}
+		local t=ecl[self.varname]
+		if t~=nil then return end
+		
+		if ecl[self.name]~=nil or ecl._autogen[self.name] then
+			local handler=ecl:GenerateRawHandler( ecl[self.handlername], handler_timing[self.name] )
+			if handler~=nil then
+				ecl[self.varname]={handler}
 			end
 		end
 	end,
 })
 
+
 -- effect_classのプロパティリスト
 local eclass_prop_list = 
 {
-	eclass_prop( "Code", function(s) 
+	eclass_prop{ "Code", constant=function(s) 
 		if string.match(s,"^EVENT_") then 
 			return true
 		elseif string.match(s,"^EFFECT_") then
 			return not string.match(s,"^EFFECT_TYPE_") and not string.match(s,"^EFFECT_COUNT_CODE_")
 		end
 		return false
-	end ),
-	eclass_prop( "Type", "^EFFECT_TYPE_", true ),
-	eclass_prop( "Category", "^CATEGORY_", true ),
-	eclass_prop( "Property", "^EFFECT_FLAG_", true ),
-	eclass_prop( "Range", function(s)
+	end },
+	eclass_prop{ "Type", constant="^EFFECT_TYPE_", arith=true },
+	eclass_prop{ "Category", constant="^CATEGORY_", arith=true },
+	eclass_prop{ "Property", constant="^EFFECT_FLAG_", arith=true },
+	eclass_prop{ "Range", constant=function(s)
 		return string.match(s,"^LOCATION_") and not string.match(s,"^LOCATION_REASON")
-	end, true ),
-	eclass_prop( "CountLimit", "^EFFECT_COUNT_CODE_" ),
-	eclass_prop( "AbsoluteRange" ),
-	eclass_prop( "HintTiming", "^TIMING_", true ),
-	eclass_prop( "Label" ),
-	eclass_prop( "LabelObject" ),
-	eclass_prop( "Reset", "^RESET_", true ),
-	eclass_prop( "TargetRange" ),
-	eclass_prop( "OwnerPlayer" ),
-	eclass_prop( "Description" ),
-	eclass_handler_prop( "Condition" ),
-	eclass_handler_prop( "Cost" ),
-	eclass_handler_prop( "Target" ),
-	eclass_handler_prop( "Operation" ),
-	eclass_handler_prop( "Value" ),
-}
-
---
-local handler_timing = 
-{
-	Condition = dev.oncond,
-	Cost = dev.oncost,
-	Target = dev.ontarget,
-	Operation = dev.onoperation,
-	Value = dev.onvalue,
+	end, arith=true },
+	eclass_prop{ "CountLimit", constant="^EFFECT_COUNT_CODE_" },
+	eclass_prop{ "HintTiming", constant="^TIMING_", arith=true },
+	eclass_prop{ "Label" },
+	eclass_prop{ "LabelObject" },
+	eclass_prop{ "Reset", constant="^RESET_", arith=true },
+	eclass_prop{ "TargetRange", altset="RawSetTargetRange" },
+	eclass_prop{ "AbsoluteRange", altset="RawSetAbsoluteRange" },
+	eclass_prop{ "Description", altset="RawSetDescription" },
+	eclass_prop{ "OwnerPlayer" },
+	eclass_handler_prop{ "Condition" },
+	eclass_handler_prop{ "Cost" },
+	eclass_handler_prop{ "Target" },
+	eclass_handler_prop{ "Operation" },
+	eclass_handler_prop{ "Value" },
 }
 
 --
@@ -234,21 +255,30 @@ dev.effect_class = dev.new_class(
 		end
 	end,
 	
-	-- single_range
-	SetSingleRange = function( self, r )
-		self:SetType( EFFECT_TYPE_SINGLE )
-		self:AddProperty( EFFECT_FLAG_SINGLE_RANGE )
-		self:SetRange( r )
+	--
+	SetSingleEffect = function( self )
+		self:ReplaceType( EFFECT_TYPE_FIELD, EFFECT_TYPE_SINGLE )
+	end,
+	SetFieldEffect = function( self )
+		self:ReplaceType( EFFECT_TYPE_SINGLE, EFFECT_TYPE_FIELD )
 	end,
 	
-	-- target_range
-	SetTargetRange = function( self, val, player )
-		self:SetType( EFFECT_TYPE_FIELD )
-		if player==nil then player=dev.both end
-		self:RawSetTargetRange( player:FormatRange(val) )
+	--
+	SetSingleRange = function( self, val )		
+		self:SetSingleEffect()
+		self:AddProperty( EFFECT_FLAG_SINGLE_RANGE )
+		self:SetRange( val )
 	end,
-	SetTargetPlayer = function( self, player )
-		self:SetTargetRange( 1, player )
+	SetTargetRange = function( self, val, player, absolute )
+		self:SetFieldEffect()
+		if absolute then
+			self:RawSetAbsoluteRange( absolute, player:FormatRange(val) )
+		else
+			self:RawSetTargetRange( player:FormatRange(val) )
+		end
+	end,
+	SetTargetPlayerRange = function( self, player, absolute )
+		self:SetTargetRange( 1, player, absolute )
 		self:AddProperty( EFFECT_FLAG_PLAYER_TARGET )
 	end,
 	
@@ -261,20 +291,27 @@ dev.effect_class = dev.new_class(
 	
 	-- reset
 	SetResetPhase = function( self, ph )
-		return self:AddReset( RESET_EVENT+RESET_PHASE+ph )
+		self:AddReset( RESET_EVENT+RESET_PHASE+ph )
 	end,
-	SetResetLeaveZone = function( self, ph )
+	SetResetLeaveZone = function( self )
 		self:AddReset( RESET_EVENT+0x1fe0000 )
-		if ph~=nil then self:SetResetPhase(ph) end
-		return self
 	end,
 	
 	-- 対象をとる
 	SetTakeTarget = function(self)
-		local r=self:AddProperty( EFFECT_FLAG_CARD_TARGET )
+		self:AddProperty( EFFECT_FLAG_CARD_TARGET )
 	end,
 	IsTakeTarget = function(self)
 		return self:TestProperty( EFFECT_FLAG_CARD_TARGET )
+	end,
+	
+	SetOath = function(self)
+		self:AddProperty( EFFECT_FLAG_OATH )
+	end,
+	
+	-- 
+	SetValue = function(self, v)
+		self:SetRawValueHandler(v)
 	end,
 	
 	--
@@ -283,7 +320,7 @@ dev.effect_class = dev.new_class(
 	-- オペレーションを登録
 	AddOperation = function( self, op, timing )
 		table.insert( self._ops, {timing, op} )
-		self:enableAutoGen( timing )
+		self:EnableHandler( timing )
 		
 		-- キー発行
 		if dev.is_class(op) then
@@ -316,8 +353,11 @@ dev.effect_class = dev.new_class(
 	-- 必須条件を登録
 	AddRequired = function( self, op, timing )
 		table.insert( self._req, {timing, op} )
-		self:enableAutoGen( timing )
+		self:EnableHandler( timing )
 		return op
+	end,
+	AddCond = function( self, op )
+		self:AddRequired( op, dev.oncond )
 	end,
 	
 	-- 発動可能かチェック
@@ -344,7 +384,7 @@ dev.effect_class = dev.new_class(
 	end,
 	
 	-- 自動生成すべきハンドラを記録する
-	enableAutoGen = function( self, tim )
+	EnableHandler = function( self, tim )
 		for k, v in pairs( handler_timing ) do
 			if bit.btest( v, tim ) then
 				self._autogen[k] = true
@@ -368,22 +408,16 @@ dev.effect_class = dev.new_class(
 	-- ハンドラ
 	--	
 	-- Effectに設定する大域のハンドラを生成
-	GenerateControlHandler = function( self, name )
-		local genhandler = (self[name]~=nil or self._autogen[name])
-		if genhandler==true then
-			local ctl_handler=self[name.."Handler"]
-			local timing=handler_timing[name]
-			
-			return function(...) 
-				local est = dev.effect_state( self, timing )
-				self:InitStateObject( est, ... )
-				return ctl_handler( self, est ) 
-			end
+	GenerateRawHandler = function( self, ctl_handler, timing )
+		return function(...) 
+			local est = dev.effect_state( self, timing )
+			self:InitStateObject( est, ... )
+			return ctl_handler( est, self ) 
 		end
 	end,
 	
 	-- condition
-	ConditionHandler = function( self, est )		
+	ConditionHandler = function( est, self )		
 		if not self:CheckRequiredCondition( est ) then 
 			self:DebugDisp("使用条件が満たされていません", est)
 			return false
@@ -400,7 +434,7 @@ dev.effect_class = dev.new_class(
 	end,
 	
 	-- cost
-	CostHandler = function( self, est )
+	CostHandler = function( est, self )
 		if est.chk then
 			if not self:CheckRequiredCondition( est ) then 
 				self:DebugDisp("コスト支払い条件が満たされていません", est)
@@ -419,7 +453,7 @@ dev.effect_class = dev.new_class(
 	end,
 	
 	-- target
-	TargetHandler = function( self, est )
+	TargetHandler = function( est, self )
 		if est.chkc then
 			if not self:CheckRequiredCondition( est ) then return false end
 			if self.CheckTargetCard then return self.CheckTargetCard( est, est.chkc )
@@ -443,7 +477,7 @@ dev.effect_class = dev.new_class(
 	end,
 	
 	-- operation
-	OperationHandler = function( self, est )
+	OperationHandler = function( est, self )
 		self:DebugDisp("SetOperation Func Called (do)", est)
 		
 		if self:IsTakeTarget() then
@@ -464,8 +498,8 @@ dev.effect_class = dev.new_class(
 	end,
 	
 	-- value
-	ValueHandler = function( self, est )
-		return self.Value( est )
+	ValueHandler = function( est, self )
+		return dev.Eval( self.Value, est )
 	end,
 	
 	--
@@ -497,6 +531,11 @@ function dev.print_effect_class( e, ename )
 			dev.print( prop.name, " = ", s )
 		end
 	end
+end
+
+-- 
+function dev.HandlerFromFilter(filter)
+	return function(est) return filter( est:GetTarget(), est ) end
 end
 
 -- 

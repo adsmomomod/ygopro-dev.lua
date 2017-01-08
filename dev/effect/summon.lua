@@ -71,13 +71,10 @@ dev.summon_tribute_sel = dev.new_class(dev.sel,
 })
 
 --
--- effect_class
+-- 召喚・特殊召喚の手順
 -- 
 dev.summon_proc_eclass = dev.new_class(
 {
-	--
-	-- 状態クラス
-	--
 	InitStateObject = function( self, est, ... )
 		if est.timing == dev.oncond then
 			dev.table.insert_array( est, {"effect", "tc", "min_tribute"}, {...} )
@@ -86,8 +83,8 @@ dev.summon_proc_eclass = dev.new_class(
 		elseif est.timing == dev.onoperation then
 			dev.table.insert_array( est, {"effect", "tp", "eg", "ep", "ev", "re", "r", "rp", "tc"}, {...} )
 		end
-		if est.tp==nil and est.tc~=nil then
-			est.tp = est.tc:GetControler()
+		if est.tp==nil then
+			est.tp = est:GetEffect():GetHandlerPlayer()
 		end
 	end,
 	
@@ -123,35 +120,33 @@ dev.summon_proc_eclass = dev.new_class(
 		end, dev.oncond )
 	end,
 	
-	AddCond = function( self, args )
-		self:AddRequired( args, dev.oncond )
-	end,
-	
 	-- target
-	TargetHandler = function( self, est )
-		return self.Target( est )
+	SetSingleTarget = function( self, filter )
+		self:SetSingleEffect()
+		self:AddRequired( dev.HandlerFromFilter( filter ), dev.oncond )
+	end,
+	SetTargetRange = function( self, ... )
+		self:SetTargetCardRange( ... )
+	end,
+	SetTarget = function( self, filter )
+		self:SetTargetHandler( dev.HandlerFromFilter( filter ) )
 	end,
 	
 	-- condition
-	ConditionHandler = function( self, est )
+	ConditionHandler = function( est, self )
 		if est:GetTarget()==nil then	
 			return true
 		end		
-		return dev.effect_class.ConditionHandler( self, est )
+		return dev.effect_class.ConditionHandler( est, self )
 	end,
 })
 
 --
---
 -- effect
 --
---
-local summonProcBase = function( self, iseffect )
+local summonProcBase = function( self )
 	self:Construct( dev.summon_proc_eclass )
-	self:SetProperty(EFFECT_FLAG_UNCOPYABLE)
-	if not iseffect then
-		self:AddProperty(EFFECT_FLAG_CANNOT_DISABLE)
-	end
+	self:SetProperty( EFFECT_FLAG_UNCOPYABLE+EFFECT_FLAG_CANNOT_DISABLE )
 end
 
 -- 自身の召喚手順
@@ -159,21 +154,6 @@ dev.effect.SummonProc = function( self )
 	summonProcBase( self )
 	self:SetCode( EFFECT_SUMMON_PROC )
 	self:SetType( EFFECT_TYPE_SINGLE )
-	self.SetTarget = function( self, filter )
-		local fn = function(est) return filter(est:GetTarget(), est) end
-		self:AddRequired( fn, dev.oncond )
-	end
-end
-
--- ほかのモンスターの召喚手順
-dev.effect.OtherSummonProc = function( self )
-	summonProcBase( self )
-	self:SetCode( EFFECT_SUMMON_PROC )
-	self:SetType( EFFECT_TYPE_FIELD )
-	self:SetTargetRange( LOCATION_HAND )	
-	self.SetTarget = function( self, filter )
-		self.Target = function(est) return filter(est:GetTarget(), est) end
-	end
 end
 
 -- 自身の唯一の召喚手順
@@ -185,16 +165,29 @@ end
 
 -- 自身の特殊召喚手順
 dev.effect.SpecialSummonProc = function( self )
-	summonProcBase( self, true )
+	summonProcBase( self )
 	self:SetCode( EFFECT_SPSUMMON_PROC )
 	self:SetType( EFFECT_TYPE_FIELD )
+	self.SetSingleTarget = nil
 end
 
 -- 自身の唯一の特殊召喚手順
 dev.effect.LimitSpecialSummonProc = function( self )
-	summonProcBase( self )
-	self:SetCode( EFFECT_SPSUMMON_PROC )
-	self:SetType( EFFECT_TYPE_FIELD )
+	dev.effect.SpecialSummonProc( self )
+	self:ReplaceProperty( EFFECT_FLAG_CANNOT_DISABLE, 0 )
 end
+
+-- 自身のセット手順
+dev.effect.SetProc = function( self )
+	dev.effect.SummonProc( self )
+	self:SetCode( EFFECT_SET_PROC )
+end
+
+-- 自身の唯一の召喚手順
+dev.effect.LimitSetProc = function( self )
+	dev.effect.LimitSummonProc( self )
+	self:SetCode( EFFECT_LIMIT_SET_PROC )
+end
+
 
 
