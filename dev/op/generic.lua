@@ -776,10 +776,11 @@ dev.tail_est_object_filter = dev.new_class(dev.head_est_object_filter,
 --  アクション
 --
 -- ================================================================================
---
-dev.do_let_object = dev.new_class(dev.action,
+-- オペランド・返り値を登録するだけ
+dev.do_let = dev.new_class(dev.action,
 {
 	__init = function( self, args )
+		dev.super_init( self, 0, 0, nil )
 		self.fn = dev.option_field( args, 1 )
 	end,
 	
@@ -794,6 +795,38 @@ dev.do_let_object = dev.new_class(dev.action,
 			end
 			st:setOperated( r )
 		end
+		return 1
+	end,
+})
+
+-- 任意のカスタマイズが可能
+dev.do_action = dev.new_class(dev.action,
+{
+	__init = function( self, args )
+		dev.super_init( self, args.cat, args.hint, args.arity )
+	
+		self.check = args.check
+		if self.check==nil then
+			self.check=function(...) return true end
+		end
+		self.checksep = args.checksep
+		if self.checksep==nil then
+			self.checksep=self.check
+		end
+		self.execute = args.execute
+	end,
+	CheckOperable = function( self, est, ... )
+		return self.check( est, ... )
+	end,
+	CheckOperableSep = function( self, est, o, idx )
+		if self.arity==1 then
+			return self:CheckOperable( est, o )
+		elseif self.arity>1 then
+			return self.checksep( est, o, idx )
+		end
+	end,
+	Execute = function( self, est, ... )
+		if self.execute then return self.execute( est, ... ) end
 		return 1
 	end,
 })

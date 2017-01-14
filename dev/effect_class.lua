@@ -41,9 +41,7 @@ local eclass_prop = dev.new_named_class("effect_class_property",
 		if setter==nil then setter="Set"..self.name end
 		ecl[setter] = function( s, ... )
 			local t = {...}
-			if #t==0 then
-				t = nil
-			end
+			if #t==0 then t=nil end
 			s[self.varname] = t
 			return s
 		end
@@ -145,11 +143,9 @@ local eclass_handler_prop = dev.new_named_class("effect_class_handler_property",
 		local t=ecl[self.varname]
 		if t~=nil then return end
 		
-		if ecl[self.name]~=nil or ecl._autogen[self.name] then
-			local handler=ecl:GenerateRawHandler( ecl[self.handlername], handler_timing[self.name] )
-			if handler~=nil then
-				ecl[self.varname]={handler}
-			end
+		local raw_handler=ecl:GetDefRawHandler( self.name )
+		if raw_handler~=nil then
+			ecl[self.varname]={raw_handler}
 		end
 	end,
 })
@@ -311,7 +307,11 @@ dev.effect_class = dev.new_class(
 	
 	-- 
 	SetValue = function(self, v)
-		self:SetRawValueHandler(v)
+		if type(v)=="function" then
+			self:SetValueHandler(v)
+		else
+			self:SetRawValueHandler(v)
+		end
 	end,
 	
 	--
@@ -383,15 +383,6 @@ dev.effect_class = dev.new_class(
 		return true
 	end,
 	
-	-- 自動生成すべきハンドラを記録する
-	EnableHandler = function( self, tim )
-		for k, v in pairs( handler_timing ) do
-			if bit.btest( v, tim ) then
-				self._autogen[k] = true
-			end
-		end
-	end,
-	
 	--
 	-- Pie関連
 	--
@@ -408,11 +399,25 @@ dev.effect_class = dev.new_class(
 	-- ハンドラ
 	--	
 	-- Effectに設定する大域のハンドラを生成
-	GenerateRawHandler = function( self, ctl_handler, timing )
-		return function(...) 
-			local est = dev.effect_state( self, timing )
-			self:InitStateObject( est, ... )
-			return ctl_handler( est, self ) 
+	GetDefRawHandler = function( self, name )
+		if self[name]~=nil or self._autogen[name]~=nil then
+			local ctl_handler=self[name.."Handler"]
+			local timing=handler_timing[name]
+			return function(...) 
+				local est = dev.effect_state( self, timing )
+				self:InitStateObject( est, ... )
+				return ctl_handler( est, self ) 
+			end
+		end
+		return nil
+	end,
+	
+	-- 自動生成すべきハンドラを宣言する
+	EnableHandler = function( self, tim )
+		for k, v in pairs( handler_timing ) do
+			if bit.btest( v, tim ) then
+				self._autogen[k] = true
+			end
 		end
 	end,
 	
@@ -524,6 +529,7 @@ dev.effect_class = dev.new_class(
 function dev.print_effect_class( e, ename )
 	ename=dev.option_arg(ename,"e")
 	dev.print(" >>> Effect "..ename.." <<< ")
+	if e==nil then dev.print(" = nil") end 
 	
 	for _, prop in ipairs( eclass_prop_list ) do
 		local s, ret = prop:Format( e )
@@ -538,9 +544,6 @@ function dev.HandlerFromFilter(filter)
 	return function(est) return filter( est:GetTarget(), est ) end
 end
 
--- 
-dev.effect = {}
-
 --
 -- コンストラクタや効果クラスから実際に効果を作成・登録
 --
@@ -554,7 +557,6 @@ end
 
 -- 効果コンストラクタやユーザーが作った効果クラスを、ビルド済み効果クラスに変換
 function dev.BuildEffectClass( eclass, cdata )
-
 	if type(eclass)=="table" and eclass._built==true then
 		return eclass
 	elseif type(eclass)=="function" then
@@ -591,6 +593,7 @@ end
 
 -- 上記すべてをまとめて行う & 効果登録
 function dev.RegisterEffect( c, eclass, eowner )
+	dev.require( eclass, "table" )
 	eclass = dev.BuildEffectClass( eclass )
 	
 	if eowner==nil then eowner = eclass:GetOwner(c) end
@@ -605,7 +608,17 @@ function dev.RegisterEffect( c, eclass, eowner )
 end
 
 -- Card
-Card.RegisterNewEffect = dev.RegisterEffect
+Card.RegisterEffectClass = dev.RegisterEffect
+
+--
+--  プリセットの効果クラスを格納
+--
+dev.effect = {}
+
+dev.new_effect = {}
+setmetatable( dev.new_effect, { __index = function( tbl, name )
+	return dev.CreateEffectClass( rawget( dev.effect, name ) )
+end })
 
 
 
