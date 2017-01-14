@@ -40,6 +40,9 @@ dev.effect_state = dev.new_class(
 	GetTimingReason = function(self)
 		return self.eclass:GetOperationReason( self )
 	end,
+	IsTimingReason = function(self, r)
+		return bit.btest( self:GetTimingReason(), r )
+	end,
 	
 	GetEffectClass = function(self)
 		return self.eclass

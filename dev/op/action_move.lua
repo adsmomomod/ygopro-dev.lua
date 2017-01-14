@@ -33,7 +33,7 @@ dev.do_remove = dev.new_class(dev.action,
 	end,
 	
 	CheckOperable = function( self, est, c )
-		if est.timing==dev.oncost then 
+		if est:IsTimingReason(REASON_COST) then 
 			return c:IsAbleToRemoveAsCost() 
 		else 
 			return c:IsAbleToRemove()
@@ -67,7 +67,7 @@ dev.do_sendto_deck = dev.new_class(dev.action,
 	end,
 	
 	CheckOperable = function( self, est, c )
-		if est.timing==dev.oncost then 
+		if est:IsTimingReason(REASON_COST) then 
 			return c:IsAbleToDeckAsCost() 
 		else 
 			return c:IsAbleToDeck()
@@ -87,7 +87,7 @@ dev.do_sendto_grave = dev.new_class(dev.action,
 	end,
 	
 	CheckOperable = function( self, est, c )
-		if est.timing==dev.oncost then 
+		if est:IsTimingReason(REASON_COST) then 
 			return c:IsAbleToGraveAsCost() 
 		else 
 			return c:IsAbleToGrave()
@@ -139,7 +139,7 @@ dev.do_sendto_hand = dev.new_class(dev.action,
 	end,
 	
 	CheckOperable = function( self, est, c ) 
-		if est.timing==dev.oncost then 
+		if est:IsTimingReason(REASON_COST) then 
 			return c:IsAbleToHandAsCost() 
 		else 
 			return c:IsAbleToHand()
@@ -199,7 +199,7 @@ dev.do_tribute = dev.new_class(dev.action,
 		self.act_category = nil
 	end,
 	CheckOperable = function( self, est, c ) 
-		return c:IsReleasable() and ( est.timing == dev.oncost or c:IsReleasableByEffect() )
+		return c:IsReleasable() and ( est:IsTimingReason(REASON_COST) or c:IsReleasableByEffect() )
 	end,
 	Execute = function( self, est, g )
 		return Duel.Release( g, est:GetTimingReason() )
