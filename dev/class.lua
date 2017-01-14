@@ -126,6 +126,9 @@ dev.class_mt = {
 -- devにメタテーブルを設定：クラスなら勝手に名前を登録
 setmetatable(dev, {
 	__newindex = function( tbl, key, val )
+		if dev_debug_newindex then
+			dev.print( "dev.__newindex "..key )
+		end
 		if dev.is_class(val) and val.__is_class==0 and tbl[key] == nil then
 			dev.register_class( key, val )
 		end

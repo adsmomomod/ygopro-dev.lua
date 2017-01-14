@@ -6,15 +6,8 @@
 -- =====================================================================
 --
 -- 表示形式を変更
--- dev.do_poschange( POS_FACEUP_ATTACK, POS_DEFENSE ) 	-- 守備表示をすべて表側攻撃表示に
--- dev.do_poschange( dev.posswap, POS_FACEUP )			-- 表側表示のカードの表示形式を変更する
+-- dev.do_change_pos{ *to = POS_FACEDOWN_DEFENSE, from = POS_DEFENSE }
 --
---[[
-	dev.do_change_pos({
-		*to = POS_FACEDOWN_DEFENSE
-		from = POS_DEFENSE,
-	})
-]]
 dev.do_change_pos = dev.new_class(dev.action,
 {
 	-- tbl / pos value
@@ -115,42 +108,60 @@ dev.do_confirm = dev.new_class(dev.action,
 	end,
 })
 
---
---
--- Aura
---
---
-
 -- 無効
-dev.do_set_disabled = dev.new_class(dev.action,
+dev.do_negate_effect = dev.new_class(dev.action,
 {
-	__init = function(self)
+	__init = function( self, args )
 		dev.super_init( self, CATEGORY_DISABLE, HINTMSG_FACEUP )
-		self.aura = dev.effect_class()
-		self.aura:SetResetLeaveZone()
+		
+		local aura = dev.effect_class()
+		aura:SetType(EFFECT_TYPE_SINGLE)
+		aura:SetProperty(EFFECT_FLAG_CANNOT_DISABLE)
+		aura:SetResetLeaveZone()
+		if args.effect then
+			aura:Inherit( args.effect )
+		end
+		if args.reset_phase then
+			aura:SetResetPhase( args.reset_phase )
+		end
+		self.aura=dev.BuildEffectClass( aura )
+		
+		self.negchain=0
+		if args.negate_chain then self.negchain=1 end
+		if args.negate_chain_related then self.negchain=2 end
 	end,
 	CheckOperable = function( self, est, c ) 
-		return c:IsFaceup() and not c:IsDisabled()
+		return c:IsFaceup() and not c:IsDisabled() 
+			and (not c:IsType(TYPE_NORMAL) or bit.band(c:GetOriginalType(),TYPE_EFFECT)~=0)
 	end,
 	Execute = function( self, est, g )
 		local c=est:GetHandler()
-		local e1=dev.InitEffect( c, self.aura )
-		e1:SetType(EFFECT_TYPE_SINGLE)
-		e1:SetCode(EFFECT_DISABLE)
-		local e2=dev.InitEffect( c, self.aura )
-		e2:SetType(EFFECT_TYPE_SINGLE)
-		e2:SetCode(EFFECT_DISABLE_EFFECT)
 		
-		local cnt = dev.Group.Sum( g, function(tc)
-			if Duel.GetCurrentChain()>=2 then
-				Duel.NegateRelatedChain(tc,RESET_TURN_SET)
-				e2:SetValue(RESET_TURN_SET)
+		local e1=dev.CreateEffect(self.aura, c)
+		e1:SetCode(EFFECT_DISABLE)
+		
+		local e2=nil
+		if self.negchain>0 then
+			e2=e1:Clone()
+			e2:SetCode(EFFECT_DISABLE_EFFECT)
+			if self.negchain>1 then e2:SetValue(RESET_TURN_SET) end
+		end
+		
+		local e3=e1:Clone()
+		e3:SetCode(EFFECT_DISABLE_TRAPMONSTER)
+		
+		local tc=g:GetFirst()
+		while tc do
+			if self.negchain>1 then
+				Duel.NegateRelatedChain(tc, RESET_TURN_SET)
 			end
-			dev.RegisterEffect( tc, e1 )
-			dev.RegisterEffect( tc, e2 )
-			return 1
-		end)
-		return cnt
+			
+			tc:RegisterEffect( e1:Clone() )
+			if e2 then tc:RegisterEffect( e2:Clone() ) end
+			if tc:IsType(TYPE_TRAPMONSTER) then tc:RegisterEffect( e3:Clone() ) end
+			
+			tc=g:GetNext()
+		end
+		return g:GetCount()
 	end,
-	
 })

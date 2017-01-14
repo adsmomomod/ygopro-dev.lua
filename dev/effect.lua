@@ -111,8 +111,4 @@ function dev.GetTargetsAllRelated( est )
 	else return nil end
 end
 
---
--- 効果ライブラリ
---
-dev.effect = {}
 

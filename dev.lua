@@ -19,7 +19,7 @@
 @include@{dev/single}
 
 -- 具体的な
---@include@{dev/effect/aura}
+@include@{dev/effect/aura}
 @include@{dev/effect/activation}
 @include@{dev/effect/summon}
 

@@ -587,66 +587,6 @@ dev.fulfill = dev.new_class(
 	end,
 })
 
---[[
-self:MainOp{
-	dev.do_sendto_extra(),
-	dev.target_sel{
-		from = dev.mzone_card(dev.both),
-		filter = function(c, est) return c:IsType(TYPE_FUSION) end
-	}
-}
-
-self:SideOp{
-	dev.do_make_object{ function(self,g) local fusc=g:GetFirst() return fusc:GetMaterial(), fusc end },
-	dev.pick_all{
-		from = dev.op_operated( sendop ),
-		filter = function(c, est) return bit.band(c:GetSummonType(),SUMMON_TYPE_FUSION)==SUMMON_TYPE_FUSION end,
-	}
-}
-
-self:SideOp{
-	dev.do_special_summon(),
-	dev.pick_all{
-		from = dev.op_operated( fusmat, 1 )
-		location = dev.grave(dev.you),
-		filter = function(c, est)
-			return dev.bit.bcontain(c:GetReason(), 0x40008)
-			and c:GetReasonCard()==est:GetOpOperated( fusmat, 2 )
-			and not c:IsHasEffect(EFFECT_NECRO_VALLEY)
-		end,
-		pie = mpie:Consumer(),
-	}
-}
-
-function self.Operation(est)
-	if sendop(est):Done() then
-		if fusmat(est):Done() then
-			if spmat:Exists(est) and Duel.SelectYesNo then
-				Duel.BreakEffect()
-				spmat(est)
-			end
-		end		
-	end
-end
-
-function c95286165.activate(e,tp,eg,ep,ev,re,r,rp)
-	local tc=Duel.GetFirstTarget()
-	if not (tc:IsRelateToEffect(e) and tc:IsFaceup()) then return end
-	local mg=tc:GetMaterial()
-	local sumable=true
-	local sumtype=tc:GetSummonType()
-	if Duel.SendtoDeck(tc,nil,0,REASON_EFFECT)==0 or bit.band(sumtype,SUMMON_TYPE_FUSION)~=SUMMON_TYPE_FUSION or mg:GetCount()==0
-		or mg:GetCount()>Duel.GetLocationCount(tp,LOCATION_MZONE)
-		or mg:IsExists(c95286165.mgfilter,1,nil,e,tp,tc) then
-		sumable=false
-	end
-	if sumable and Duel.SelectYesNo(tp,aux.Stringid(95286165,0)) then
-		Duel.BreakEffect()
-		Duel.SpecialSummon(mg,0,tp,tp,false,false,POS_FACEUP)
-	end
-end
-]]--
-
 --
 -- オペレーションの引数
 --
@@ -770,16 +710,18 @@ dev.tail_est_object_filter = dev.new_class(dev.head_est_object_filter,
 	end,
 })
 
+
 -- 
 -- ================================================================================
 --
 --  アクション
 --
 -- ================================================================================
---
-dev.do_let_object = dev.new_class(dev.action,
+-- オペランド・返り値を登録するだけ
+dev.do_let = dev.new_class(dev.action,
 {
 	__init = function( self, args )
+		dev.super_init( self, 0, 0, nil )
 		self.fn = dev.option_field( args, 1 )
 	end,
 	
@@ -794,6 +736,38 @@ dev.do_let_object = dev.new_class(dev.action,
 			end
 			st:setOperated( r )
 		end
+		return 1
+	end,
+})
+
+-- 任意のカスタマイズが可能
+dev.do_action = dev.new_class(dev.action,
+{
+	__init = function( self, args )
+		dev.super_init( self, args.cat, args.hint, args.arity )
+	
+		self.check = args.check
+		if self.check==nil then
+			self.check=function(...) return true end
+		end
+		self.checksep = args.checksep
+		if self.checksep==nil then
+			self.checksep=self.check
+		end
+		self.execute = args.execute
+	end,
+	CheckOperable = function( self, est, ... )
+		return self.check( est, ... )
+	end,
+	CheckOperableSep = function( self, est, o, idx )
+		if self.arity==1 then
+			return self:CheckOperable( est, o )
+		elseif self.arity>1 then
+			return self.checksep( est, o, idx )
+		end
+	end,
+	Execute = function( self, est, ... )
+		if self.execute then return self.execute( est, ... ) end
 		return 1
 	end,
 })
