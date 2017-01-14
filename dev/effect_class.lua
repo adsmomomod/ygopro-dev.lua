@@ -525,6 +525,11 @@ dev.effect_class = dev.new_class(
 	end,
 })
 
+-- 
+function dev.HandlerFromFilter(filter)
+	return function(est) return filter( est:GetTarget(), est ) end
+end
+
 -- 効果クラスのデバッグ表示
 function dev.print_effect_class( e, ename )
 	ename=dev.option_arg(ename,"e")
@@ -537,11 +542,6 @@ function dev.print_effect_class( e, ename )
 			dev.print( prop.name, " = ", s )
 		end
 	end
-end
-
--- 
-function dev.HandlerFromFilter(filter)
-	return function(est) return filter( est:GetTarget(), est ) end
 end
 
 --
@@ -557,7 +557,7 @@ end
 
 -- 効果コンストラクタやユーザーが作った効果クラスを、ビルド済み効果クラスに変換
 function dev.BuildEffectClass( eclass, cdata )
-	if type(eclass)=="table" and eclass._built==true then
+	if type(eclass)=="table" and eclass._isbuilt==true then
 		return eclass
 	elseif type(eclass)=="function" then
 		eclass = dev.CreateEffectClass( eclass, cdata )
@@ -570,7 +570,7 @@ function dev.BuildEffectClass( eclass, cdata )
 		end
 	end
 	
-	eclass._built = true -- ハンドラ等の生成が済んだものとそうでないものを区別
+	eclass._isbuilt = true -- ハンドラ等の生成が済んだものとそうでないものを区別
 	return eclass	
 end
 

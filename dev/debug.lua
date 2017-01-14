@@ -206,6 +206,7 @@ dev.call_param_hook = function(name)
 	return dev.call_hook_proc(name, function(...) return end)
 end
 
-
+--
+local dev_debug_newindex=false
 
 

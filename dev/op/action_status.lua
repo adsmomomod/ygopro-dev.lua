@@ -108,7 +108,6 @@ dev.do_confirm = dev.new_class(dev.action,
 	end,
 })
 
-
 -- 無効
 dev.do_negate_effect = dev.new_class(dev.action,
 {
@@ -127,7 +126,9 @@ dev.do_negate_effect = dev.new_class(dev.action,
 		end
 		self.aura=dev.BuildEffectClass( aura )
 		
-		self.negchain = args.negate_chain
+		self.negchain=0
+		if args.negate_chain then self.negchain=1 end
+		if args.negate_chain_related then self.negchain=2 end
 	end,
 	CheckOperable = function( self, est, c ) 
 		return c:IsFaceup() and not c:IsDisabled() 
@@ -139,24 +140,28 @@ dev.do_negate_effect = dev.new_class(dev.action,
 		local e1=dev.CreateEffect(self.aura, c)
 		e1:SetCode(EFFECT_DISABLE)
 		
-		local e2=e1:Clone()
-		e2:SetCode(EFFECT_DISABLE_EFFECT)
-		if self.negchain then e2:SetValue(RESET_TURN_SET) end
+		local e2=nil
+		if self.negchain>0 then
+			e2=e1:Clone()
+			e2:SetCode(EFFECT_DISABLE_EFFECT)
+			if self.negchain>1 then e2:SetValue(RESET_TURN_SET) end
+		end
 		
 		local e3=e1:Clone()
 		e3:SetCode(EFFECT_DISABLE_TRAPMONSTER)
 		
-		local cnt = dev.Group.ForEach( g, function(tc)
-			if self.negchain then
+		local tc=g:GetFirst()
+		while tc do
+			if self.negchain>1 then
 				Duel.NegateRelatedChain(tc, RESET_TURN_SET)
 			end
-			tc:RegisterEffect( e1 )
-			tc:RegisterEffect( e2 )
-			if tc:IsType(TYPE_TRAPMONSTER) then
-				tc:RegisterEffect( e3 )
-			end
-			return 1
-		end)
-		return cnt
+			
+			tc:RegisterEffect( e1:Clone() )
+			if e2 then tc:RegisterEffect( e2:Clone() ) end
+			if tc:IsType(TYPE_TRAPMONSTER) then tc:RegisterEffect( e3:Clone() ) end
+			
+			tc=g:GetNext()
+		end
+		return g:GetCount()
 	end,
 })
