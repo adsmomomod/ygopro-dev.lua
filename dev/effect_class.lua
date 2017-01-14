@@ -549,11 +549,20 @@ end
 --
 
 -- 効果コンストラクタから、新しい空の効果クラスを作成
-function dev.CreateEffectClass( eclassiniter, cdata )
+function dev.CreateEffectClass( eclassiniter, cdata, ... )
+	local args = table.pack(...)
 	local ec=dev.effect_class( cdata )
-	eclassiniter( ec )
+	eclassiniter( ec, table.unpack(args) )
 	return ec
 end
+
+-- 
+function dev.BindEffectIniter( eclassiniter, ... )
+	local args = table.pack(...)
+	return function( self )
+		return eclassiniter( self, table.unpack(args) )
+	end
+end	
 
 -- 効果コンストラクタやユーザーが作った効果クラスを、ビルド済み効果クラスに変換
 function dev.BuildEffectClass( eclass, cdata )

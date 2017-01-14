@@ -165,3 +165,33 @@ dev.do_negate_effect = dev.new_class(dev.action,
 		return g:GetCount()
 	end,
 })
+
+-- ステータス変動
+dev.do_affect = dev.new_class(dev.action,
+{
+	__init = function( self, args )
+		self.auras = {}
+		for i, initer in ipairs(args) do
+			local aura = dev.CreateEffectClass( initer )
+			aura:SetSingleEffect()
+			self.auras[i] = aura
+		end
+	end,
+	
+	Execute = function( self, est, g )
+		local c=est:GetHandler()
+		local es={}		
+		for i, aura in ipairs(self.auras) do
+			es[i]=dev.CreateEffect(aura, c)
+		end
+		local tc=g:GetFirst()
+		while tc do
+			for i, e in ipairs(es) do
+				tc:RegisterEffect(e:Clone())
+			end
+			tc=g:GetNext()
+		end
+		return g:GetCount()
+	end,
+})
+

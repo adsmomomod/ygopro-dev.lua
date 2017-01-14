@@ -597,39 +597,44 @@ dev.op_operand = dev.new_class(
 		self.opr = dev.option_arg(operand, 1)
 	end,
 	
-	-- インターフェース関数
-	Select = function( self, est )
-		local r=est:GetOpState( self.op )
-		if r==nil then
+	getOpValue = function( self, est, req )
+		local r=est:GetOpOperand( self.op, self.opr )
+		if req and r==nil then
 			est:OpDebugDisp("op_operand: キー=", self.op.key, "のオペレーションはまだ実行されていません")
 		end
-		return r:GetOperand( self.opr )
+		return r
+	end,
+	
+	-- インターフェース関数
+	Select = function( self, est )
+		return self:getOpValue(est, true)
 	end,
 	Exists = function( self, est )
 		local r=est:GetOpCheck( self.op )
 		return r
 	end,
 	GetAll = function( self, est )
-		if est:GetOpState( self.op ) then
-			return self:Select( est )
+		local r=self:getOpValue(est)
+		if r then
+			return r
 		else
-			local r=self.op:GetAllObject( est, self.opr )
-			return r[1]
+			return self.op:GetAllOperand( est, self.opr )
 		end
 	end,	
 	GetMinMax = function( self, est )
 		local mi = 0
 		local mx = 0
-		if est:GetOpState( self.op ) then
-			mi = self:Select( est ):GetCount()
+		local r=self:getOpValue(est)
+		if r then
+			mi = r:GetCount()
 			mx = mi
 		else
-			mi, mx=self.op:GetObjectMinMax( est, self.opr )
+			mi, mx=self.op:GetMinMaxOperand( est, self.opr )
 		end
 		return mi, mx
 	end,
 	Location = function( self, est )
-		return self.op:GetObjectLocation( est, self.opr )
+		return self.op:LocationOperand( est, self.opr )
 	end,
 })
 
@@ -642,13 +647,12 @@ dev.op_operated = dev.new_class(dev.op_operand,
 		dev.super_init( self, op, operand )
 	end,
 	
-	-- インターフェース関数
-	Select = function( self, est )
-		local r=est:GetOpState( self.op )
-		if r==nil then
+	getOpValue = function( self, est, req )
+		local r=est:GetOpOperated( self.op, self.opr )
+		if req and r==nil then
 			est:OpDebugDisp("op_operated: キー=", self.op.key, "のオペレーションはまだ実行されていません")
 		end
-		return r:GetOperated( self.opr )
+		return r
 	end,
 })
 
@@ -771,6 +775,3 @@ dev.do_action = dev.new_class(dev.action,
 		return 1
 	end,
 })
-
-
-

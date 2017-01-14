@@ -226,10 +226,16 @@ dev.operation_state = dev.new_class(
 	
 	-- 
 	GetOperand = function( self, i )
-		return self.operand:GetTable()[ dev.option_arg(i,1) ]
+		if self.operand then
+			return self.operand:GetTable()[ dev.option_arg(i,1) ]
+		end
+		return nil
 	end,
 	GetOperated = function( self, i )
-		return self.operated[ dev.option_arg(i,1) ]
+		if self.operated then
+			return self.operated[ dev.option_arg(i,1) ]
+		end
+		return nil
 	end,
 	GetOperatedCount = function( self )
 		return self.operated_count

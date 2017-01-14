@@ -14,7 +14,7 @@ dev.card_init_class = dev.new_class(
 	
 	RegisterToCard = function( self, c )
 		setmetatable( self, { __index = c } )
-		self.func(self)
+		self.func( c, self )
 	end,
 })
 dev.CardInitClass = function( f, cd )

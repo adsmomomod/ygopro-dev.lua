@@ -159,7 +159,7 @@ dev.spec_zone_card = dev.new_class( dev.zone_card,
 	getOutSource = function(self, est)
 		local gsrc=est:OperandState().source
 		if gsrc then
-			local all=self:GetAll(est)
+			local all=self:GetAllObject(est)
 			return gsrc:Filter( function(c) return all:IsContains(c) end, nil )
 		end
 		return nil
