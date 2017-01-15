@@ -32,9 +32,9 @@ end
 dev.flag_effect = dev.new_class(
 {
 	__init = function( self, args )
-		dev.require( args, {{ code = "number" }} )
+		dev.require( args, {{ [1] = "number" }} )
 		
-		self.code = args.code
+		self.code = args[1]
 		self.reset = dev.option_arg( args.reset, 0 )
 		self.flag = dev.option_arg( args.flag, 0 )
 		self.count = dev.option_arg( args.count, 0 )
@@ -61,7 +61,7 @@ dev.flag_effect = dev.new_class(
 	end,
 })
 
-dev.duel_flag_effect = dev.new_class(dev.flag_effect,
+dev.player_flag_effect = dev.new_class(dev.flag_effect,
 {
 	__init = function( self, args )
 		dev.super_init( self, args )
@@ -69,8 +69,11 @@ dev.duel_flag_effect = dev.new_class(dev.flag_effect,
 	Register = function(self, tp)
 		return Duel.RegisterFlagEffect(tp, self.code, self.reset, self.flag, self.count)
 	end,
+	Get = function(self, tp)
+		return Duel.GetFlagEffect(tp, self.code)
+	end,
 	Test = function(self, tp)
-		return Duel.RegisterFlagEffect(tp, self.code, self.reset, self.flag, self.count)
+		return self:Get(tp)~=0
 	end,
 	Reset = function(self)
 		return Duel.ResetFlagEffect(self.code)

@@ -18,7 +18,7 @@
 ]]--
 dev.sel = dev.new_class(
 {
-	__init = function(self, args)	
+	__init = function(self, args)
 		dev.require( args, {{ from = true }} )
 		self.o = args.from
 		
@@ -223,10 +223,6 @@ dev.step_sel = dev.new_class(dev.sel,
 })
 
 --
--- ～を含むカードを選択
---
-
---
 -- ランダムなカード
 --
 dev.random_pick = dev.new_class(dev.sel,
@@ -257,26 +253,40 @@ dev.random_pick = dev.new_class(dev.sel,
 --
 --
 --
-dev.allmatch = dev.new_class(dev.sel,
+dev.match = dev.new_class(dev.sel,
 {
 	__init = function(self, args)
 		dev.super_init(self, args)
 		self.o = args.from
 		self.filter = args.filter
+		self.mi = args.min
+		self.mx = args.max
+	end,
+	
+	testMatch = function( self, est )
+		local g=self.o:GetAll( est )
+		local gcnt=g:GetCount()
+		
+		local mi=dev.option_arg( dev.eval( self.mi, est ), gcnt )
+		local mx=dev.option_arg( dev.eval( self.mx, est ), 0x7FFFFFFF )	
+		local cnt=g:FilterCount( self.filter, nil, est )
+		return (mi<=cnt and cnt<=mx), g
 	end,
 	
 	Exists = function( self, est )
-		local g=self.o:GetAll( est )
-		return g:IsExists( self.filter, g:GetCount(), nil, est )
+		local chk, g=self:testMatch(est)
+		return chk
 	end,
 	
 	Select = function( self, est )
-		local g=self.o:GetAll( est )
-		if not g:IsExists( self.filter, g:GetCount(), nil, est ) then
+		local chk, g=self:testMatch(est)
+		if not chk then
 			g:Clear()
 		end
 		return g
 	end,
+	
+	SelectImpl = nil
 })
 
 --

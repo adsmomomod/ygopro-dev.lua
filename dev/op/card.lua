@@ -301,7 +301,7 @@ dev.target_sel = dev.new_class( dev.target,
 		end
 		
 		if args.resolve_complete then
-			args.resolution = dev.allmatch{ from = dev.any_card(), filter = rfilter }
+			args.resolution = dev.match{ from = dev.any_card(), filter = rfilter }
 		else
 			args.filter = rfilter
 			args.resolution = dev.pick_sel{ from = dev.any_card(args) }
