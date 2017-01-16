@@ -172,7 +172,7 @@ local eclass_prop_list =
 	eclass_prop{ "HintTiming", constant="^TIMING_", arith=true },
 	eclass_prop{ "Label" },
 	eclass_prop{ "LabelObject" },
-	eclass_prop{ "Reset", constant="^RESET_", arith=true },
+	eclass_prop{ "Reset", constant="^RESET_", arith=true, altset="RawSetReset" },
 	eclass_prop{ "TargetRange", altset="RawSetTargetRange" },
 	eclass_prop{ "AbsoluteRange", altset="RawSetAbsoluteRange" },
 	eclass_prop{ "Description", altset="RawSetDescription" },
@@ -224,6 +224,11 @@ dev.effect_class = dev.new_class(
 	-- 用意されたビルダを実行する
 	Inherit = function( self, builder )
 		builder( self )
+	end,
+	
+	--
+	Clone = function( self )
+		return dev.table.shallowcopy(self)
 	end,
 	
 	-- 効果登録に関するパラメータ
@@ -286,11 +291,22 @@ dev.effect_class = dev.new_class(
 	end,
 	
 	-- reset
-	SetResetPhase = function( self, ph )
-		self:AddReset( RESET_EVENT+RESET_PHASE+ph )
-	end,
-	SetResetLeaveZone = function( self )
-		self:AddReset( RESET_EVENT+0x1fe0000 )
+	SetReset = function( self, arg )
+		local v=0
+		if type(arg)=="number" then
+			v=arg
+		elseif type(arg)=="table" then
+			for i, val in ipairs(arg) do
+				v=bit.bor(v, val)
+			end
+			if arg.phase then
+				v=bit.bor(v, RESET_EVENT+RESET_PHASE+arg.phase)
+			end
+			if arg.leave_faceup then
+				v=bit.bor(v, RESET_EVENT+0x1fe0000)
+			end
+		end
+		self:RawSetReset(v)
 	end,
 	
 	-- 対象をとる

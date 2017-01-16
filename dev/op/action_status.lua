@@ -117,12 +117,9 @@ dev.do_negate_effect = dev.new_class(dev.action,
 		local aura = dev.effect_class()
 		aura:SetType(EFFECT_TYPE_SINGLE)
 		aura:SetProperty(EFFECT_FLAG_CANNOT_DISABLE)
-		aura:SetResetLeaveZone()
+		aura:SetReset{ leave_faceup = true, phase = args.reset_phase }
 		if args.effect then
 			aura:Inherit( args.effect )
-		end
-		if args.reset_phase then
-			aura:SetResetPhase( args.reset_phase )
 		end
 		self.aura=dev.BuildEffectClass( aura )
 		

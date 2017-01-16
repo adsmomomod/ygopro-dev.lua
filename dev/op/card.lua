@@ -323,7 +323,7 @@ dev.tribute_card = dev.new_class( dev.zone_card,
 		if args==nil then args = {} end
 		dev.require( args, "table" )
 		
-		self.player = dev.option_arg( args.player, dev.you )
+		self.player = dev.option_arg( args[1], dev.you )
 		self.hand = dev.option_arg( args.fromhand, false )
 		
 		local loc = LOCATION_DECK + dev.option_val(self.hand, LOCATION_HAND, 0)
@@ -346,6 +346,10 @@ dev.tribute_card = dev.new_class( dev.zone_card,
 		else
 			return Duel.GetReleaseGroupCount( dev.eval( self.player, est ), self.hand )
 		end
+	end,
+	
+	Select = function( self, est )
+		return self:GetAll( est )
 	end,
 	
 	GetFirst = function( self, est )
