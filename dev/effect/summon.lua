@@ -73,7 +73,7 @@ dev.summon_tribute_sel = dev.new_class(dev.sel,
 --
 -- 召喚・特殊召喚の手順
 -- 
-dev.summon_proc_eclass = dev.new_class(
+dev.effect_class.summon_proc = dev.new_class(
 {
 	InitStateObject = function( self, est, ... )
 		if est.timing == dev.oncond then
@@ -145,7 +145,7 @@ dev.summon_proc_eclass = dev.new_class(
 -- effect
 --
 local summonProcBase = function( self )
-	self:Construct( dev.summon_proc_eclass )
+	self:Inherit( dev.effect_class.summon_proc )
 	self:SetProperty( EFFECT_FLAG_UNCOPYABLE+EFFECT_FLAG_CANNOT_DISABLE )
 end
 

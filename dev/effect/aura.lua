@@ -18,7 +18,7 @@ local value_handler_card 	= { "effect", "tc" }
 local value_handler_effect 	= { "effect", "e" }
 
 -- カードを対象にかかる効果
-dev.aura_eclass = dev.new_class(
+dev.effect_class.aura = dev.new_class(
 {
 	__init = function( self, tgargs, valargs, conargs )
 		self.tgargs  = dev.option_arg( tgargs, target_handler )
@@ -69,11 +69,12 @@ dev.aura_eclass = dev.new_class(
 -- カード専門
 local aura_effect_initer = function( code, a, b, c, d )
 	return function( self )
-		self:Construct( dev.aura_eclass, a, b, c, d )
+		self:Inherit( dev.effect_class.aura, a, b, c, d )
 		self:SetCode( code )
 		self:SetType( EFFECT_TYPE_SINGLE )
 	end
 end
+dev.effect.Aura = aura_effect_initer
 
 -- ==========================================================
 --
@@ -230,7 +231,7 @@ dev.effect.Immune = aura_effect_initer( EFFECT_IMMUNE_EFFECT )
 --
 local redirect_aura_initer = function( code )
 	return function( self )
-		self:Construct( dev.aura_eclass, nil, value_handler_card )
+		self:Inherit( dev.effect_class.aura, nil, value_handler_card )
 		self:SetCode( code )
 		self.SetDest = self.SetValue -- 行き先を返す関数でもOK
 		self.SetProcTarget = nil

@@ -216,14 +216,14 @@ dev.effect_class = dev.new_class(
 	--
 	-- パラメータ設定
 	--
-	-- 自身を指定のクラス型へ変換し初期化
-	Construct = function( self, class, ... )
-		dev.instantiate( self, class, ... )
-	end,
-	
+	--
 	-- 用意されたビルダを実行する
-	Inherit = function( self, builder )
-		builder( self )
+	Inherit = function( self, builder, ... )
+		if dev.is_class(builder) then
+			dev.instantiate( self, class, ... )
+		else
+			builder( self, ... )
+		end
 	end,
 	
 	--
